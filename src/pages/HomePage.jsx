@@ -389,7 +389,7 @@ export default function HomePage() {
             Good at math, want to learn English?<br/>
             SkillBridge connects you with someone who<br/>
             <strong className="text-[#1A1410] font-bold">teaches what you need</strong> and{' '}
-            <strong className="text-[#1A1410] font-bold">needs what you teach</strong> —<br/>
+            <strong className="text-[#1A1410] font-bold">needs what you teach</strong> .<br/>
             no numbers, no socials shared.
           </p>
  
