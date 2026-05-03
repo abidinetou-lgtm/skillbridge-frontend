@@ -27,7 +27,7 @@ export default function Profile() {
   const [posts, setPosts] = useState([
     { id:1, text:'First math session — finally understood derivatives!', likes:24, bg:'#EEEADE', color:'#3D3020', time:'2h ago' },
     { id:2, text:'Taught English for 3 hours today. So rewarding!',      likes:18, bg:'#E4EED8', color:'#3D5C28', time:'Yesterday' },
-    { id:3, text:'60 credits earned this week 🎉',                        likes:41, bg:'#ECEEF8', color:'#252840', time:'3 days ago' },
+    { id:3, text:'60 credits earned this week ',                        likes:41, bg:'#ECEEF8', color:'#252840', time:'3 days ago' },
   ])
 
   // Edit form state
@@ -171,7 +171,7 @@ export default function Profile() {
       {/* Cover */}
       <div className="h-[200px] bg-gradient-to-br from-[#252840] via-[#363B6B] to-[#C8864B] relative">
         {/* Hamburger menu */}
-        <div className="absolute top-4 right-6">
+        <div className="absolute top-4 right-6 relative">
           <button onClick={() => setMenuOpen(p => !p)}
             className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">

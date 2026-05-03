@@ -11,6 +11,7 @@ import ProfilePage from './pages/Profile'
 import UserProfilePage from './pages/UserProfile'  // ← profil d'un autre user
 import RegisterPage from './pages/Register'
 import useAuthStore from './store/authStore'
+import CallScreen from './pages/CallScreen'
 
 // Route protégée — redirige vers / si non connecté
 function ProtectedRoute({ children }) {
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/feed"         element={<FeedPage />} />
         <Route path="/connection"   element={<ConnectionPage />} />
         {/* Routes protégées */}
+        <Route path="/call" element={<ProtectedRoute><CallScreen /></ProtectedRoute>} />
         <Route path="/chat"         element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/user/:id"     element={<UserProfilePage />} />

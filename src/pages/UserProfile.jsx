@@ -128,7 +128,7 @@ export default function UserProfile() {
             )}
             {reqState === 'pending' && (
               <div className="px-5 py-[10px] rounded-xl bg-[#ECEEF8] text-[#252840] text-[13px] font-bold">
-                ⏳ Request sent — waiting for acceptance
+                 Request sent — waiting for acceptance
               </div>
             )}
             {reqState === 'accepted' && (
@@ -213,8 +213,8 @@ export default function UserProfile() {
               <h3 className="text-[14px] font-bold text-[#1A1410] mb-4">Stats</h3>
               {[
                 { label:'Sessions given', value: profile.sessions, color:'#3D5C28' },
-                { label:'Credits earned', value: `${profile.credits} ⚡`, color:'#252840' },
-                { label:'Rating',         value: `${profile.rating} / 5 ⭐`, color:'#C8864B' },
+                { label:'Credits earned', value: `${profile.credits} `, color:'#252840' },
+                { label:'Rating',         value: `${profile.rating} / 5 `, color:'#C8864B' },
                 { label:'Match score',    value: `${profile.score}%`, color:'#252840' },
               ].map(s => (
                 <div key={s.label} className="flex items-center justify-between py-2 border-b border-black/[0.06] last:border-0">
@@ -225,7 +225,7 @@ export default function UserProfile() {
             </div>
 
             <div className="bg-[#ECEEF8] rounded-2xl p-5">
-              <p className="text-[12px] font-bold text-[#252840] mb-2">⚡ How connections work</p>
+              <p className="text-[12px] font-bold text-[#252840] mb-2"> How connections work</p>
               <p className="text-[12px] text-[#7A6E5C] leading-[1.6]">
                 Send a connection request. Once accepted, you'll be able to chat and start skill exchange sessions. Each minute you teach earns you credits — each minute you learn costs credits.
               </p>
