@@ -103,45 +103,58 @@ export default function UserProfile() {
   }
 
   return (
-    <main className="pt-[62px] min-h-screen bg-[#F8F4EA]">
+    <main className="pt-[62px] min-h-screen bg-white">
 
       {/* Cover */}
       <div className="h-[180px] bg-gradient-to-br from-[#252840] via-[#363B6B] to-[#C8864B]" />
 
       <div className="px-20">
-        {/* Avatar + actions */}
-        <div className="flex items-end justify-between -mt-12 mb-6">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-full border-4 border-[#F8F4EA] flex items-center justify-center font-black text-[32px] text-white"
+        {/* Avatar — sort de la bannière */}
+        <div className="-mt-12 mb-4">
+          <div className="relative inline-block">
+            <div className="w-24 h-24 rounded-full border-4 border-white flex items-center justify-center font-black text-[32px] text-white"
               style={{ background: profile.color }}>
               {profile.initials}
             </div>
-            {profile.dispo && <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#3D5C28] border-2 border-[#F8F4EA]" />}
+            {profile.dispo && (
+              <div className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[#3D5C28] border-2 border-white" />
+            )}
           </div>
+        </div>
 
-          <div className="flex gap-3 mb-2">
-            {reqState === 'idle' && (
-              <button onClick={handleRequest}
-                className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
-                Request connection
-              </button>
-            )}
-            {reqState === 'pending' && (
-              <div className="px-5 py-[10px] rounded-xl bg-[#ECEEF8] text-[#252840] text-[13px] font-bold">
-                 Request sent — waiting for acceptance
-              </div>
-            )}
-            {reqState === 'accepted' && (
-              <button onClick={() => navigate('/chat')}
-                className="px-5 py-[10px] rounded-xl bg-[#3D5C28] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all">
-                💬 Message
-              </button>
-            )}
-            <button onClick={() => navigate(-1)}
-              className="px-5 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] text-[#7A6E5C] text-[13px] font-semibold bg-transparent cursor-pointer hover:border-[#1A1410] hover:text-[#1A1410] transition-all">
-              ← Back
+        {/* Actions — bien séparées de la bannière */}
+        <div className="flex items-center gap-3 mb-6">
+          {reqState === 'idle' && (
+            <button onClick={handleRequest}
+              className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+              Request connection
             </button>
-          </div>
+          )}
+          {reqState === 'pending' && (
+            <div className="flex items-center gap-2 px-5 py-[10px] rounded-xl bg-[#ECEEF8] text-[#252840] text-[13px] font-bold">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="7" cy="7" r="5.5"/>
+                <path d="M7 4v3l2 2"/>
+              </svg>
+              Request sent — waiting for acceptance
+            </div>
+          )}
+          {reqState === 'accepted' && (
+            <button onClick={() => navigate('/chat')}
+              className="flex items-center gap-2 px-5 py-[10px] rounded-xl bg-[#3D5C28] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M1 1h12v8H8l-1 4-1-4H1z"/>
+              </svg>
+              Message
+            </button>
+          )}
+          <button onClick={() => navigate(-1)}
+            className="flex items-center gap-2 px-5 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] text-[#7A6E5C] text-[13px] font-semibold bg-transparent cursor-pointer hover:border-[#1A1410] hover:text-[#1A1410] transition-all">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M9 2L4 7l5 5"/>
+            </svg>
+            Back
+          </button>
         </div>
 
         <div className="grid grid-cols-[1fr_320px] gap-10 pb-16">
@@ -213,8 +226,8 @@ export default function UserProfile() {
               <h3 className="text-[14px] font-bold text-[#1A1410] mb-4">Stats</h3>
               {[
                 { label:'Sessions given', value: profile.sessions, color:'#3D5C28' },
-                { label:'Credits earned', value: `${profile.credits} `, color:'#252840' },
-                { label:'Rating',         value: `${profile.rating} / 5 `, color:'#C8864B' },
+                { label:'Credits earned', value: `${profile.credits} ⚡`, color:'#252840' },
+                { label:'Rating',         value: `${profile.rating} / 5 ⭐`, color:'#C8864B' },
                 { label:'Match score',    value: `${profile.score}%`, color:'#252840' },
               ].map(s => (
                 <div key={s.label} className="flex items-center justify-between py-2 border-b border-black/[0.06] last:border-0">
@@ -225,7 +238,7 @@ export default function UserProfile() {
             </div>
 
             <div className="bg-[#ECEEF8] rounded-2xl p-5">
-              <p className="text-[12px] font-bold text-[#252840] mb-2"> How connections work</p>
+              <p className="text-[12px] font-bold text-[#252840] mb-2">⚡ How connections work</p>
               <p className="text-[12px] text-[#7A6E5C] leading-[1.6]">
                 Send a connection request. Once accepted, you'll be able to chat and start skill exchange sessions. Each minute you teach earns you credits — each minute you learn costs credits.
               </p>

@@ -27,7 +27,7 @@ export default function Profile() {
   const [posts, setPosts] = useState([
     { id:1, text:'First math session — finally understood derivatives!', likes:24, bg:'#EEEADE', color:'#3D3020', time:'2h ago' },
     { id:2, text:'Taught English for 3 hours today. So rewarding!',      likes:18, bg:'#E4EED8', color:'#3D5C28', time:'Yesterday' },
-    { id:3, text:'60 credits earned this week ',                        likes:41, bg:'#ECEEF8', color:'#252840', time:'3 days ago' },
+    { id:3, text:'60 credits earned this week 🎉',                        likes:41, bg:'#ECEEF8', color:'#252840', time:'3 days ago' },
   ])
 
   // Edit form state
@@ -142,18 +142,58 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Add post modal */}
+      {/* Modal — Add post (texte + image + vidéo) */}
       {addPostOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
           onClick={e => e.target === e.currentTarget && setAddPostOpen(false)}>
-          <div className="bg-[#FDFAF4] rounded-2xl p-8 w-full max-w-[480px]">
-            <h2 className="text-[18px] font-black text-[#1A1410] mb-4">New post</h2>
+          <div className="bg-white rounded-2xl p-8 w-full max-w-[520px]">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[18px] font-black text-[#1A1410]">New post</h2>
+              <button onClick={() => setAddPostOpen(false)}
+                className="w-7 h-7 rounded-full bg-black/5 border-none cursor-pointer text-[#7A6E5C] flex items-center justify-center hover:bg-black/10 text-[13px]">✕</button>
+            </div>
+
             <textarea
               value={newPost}
               onChange={e => setNewPost(e.target.value)}
               placeholder="Share a progress update, tip, or thought..."
-              className="w-full px-4 py-3 rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F4EA] text-[14px] text-[#1A1410] outline-none focus:border-[#252840] transition-all resize-none h-28 mb-4"
+              className="w-full px-4 py-3 rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F8F8] text-[14px] text-[#1A1410] outline-none focus:border-[#252840] transition-all resize-none h-28 mb-4"
             />
+
+            {/* Media upload — image ou vidéo */}
+            <div className="mb-5">
+              <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#7A6E5C] mb-2">Add media (optional)</p>
+              <div className="flex gap-2">
+                <label className="flex items-center gap-2 px-4 py-2 rounded-xl border-[1.5px] border-black/[0.09] text-[12px] font-semibold text-[#7A6E5C] cursor-pointer hover:border-[#252840] hover:text-[#252840] transition-all">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <rect x="1" y="3" width="12" height="9" rx="2"/>
+                    <circle cx="5" cy="6.5" r="1.2"/>
+                    <path d="M1 10l3-3 2 2 2-2 3 3"/>
+                  </svg>
+                  Photo
+                  <input type="file" accept="image/*" className="hidden"
+                    onChange={e => {
+                      const f = e.target.files[0]
+                      if (f) setNewPost(p => p + (p ? '\n' : '') + `[Photo: ${f.name}]`)
+                    }}
+                  />
+                </label>
+                <label className="flex items-center gap-2 px-4 py-2 rounded-xl border-[1.5px] border-black/[0.09] text-[12px] font-semibold text-[#7A6E5C] cursor-pointer hover:border-[#252840] hover:text-[#252840] transition-all">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                    <rect x="1" y="3" width="9" height="8" rx="2"/>
+                    <path d="M10 5.5l3-2v7l-3-2"/>
+                  </svg>
+                  Video
+                  <input type="file" accept="video/*" className="hidden"
+                    onChange={e => {
+                      const f = e.target.files[0]
+                      if (f) setNewPost(p => p + (p ? '\n' : '') + `[Video: ${f.name}]`)
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button onClick={() => setAddPostOpen(false)}
                 className="flex-1 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[13px] font-semibold text-[#7A6E5C] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all">
@@ -168,27 +208,53 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Cover */}
-      <div className="h-[200px] bg-gradient-to-br from-[#252840] via-[#363B6B] to-[#C8864B] relative">
-        {/* Hamburger menu */}
-        <div className="absolute top-4 right-6 relative">
-          <button onClick={() => setMenuOpen(p => !p)}
-            className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
+      {/* Cover + hamburger — le hamburger est DANS la cover, position absolute right */}
+      <div className="h-[200px] bg-gradient-to-br from-[#252840] via-[#363B6B] to-[#C8864B] relative overflow-visible">
+        {/* Hamburger — top-right de la cover */}
+        <div className="absolute top-4 right-6 z-30">
+          <button
+            onClick={() => setMenuOpen(p => !p)}
+            className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 text-white flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all"
+          >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M2 4h14M2 9h14M2 14h14" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
           </button>
           {menuOpen && (
-            <div className="absolute top-12 right-0 bg-[#FDFAF4] border border-black/[0.09] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.15)] py-1 w-[200px] z-20">
+            <div className="absolute top-12 right-0 bg-white border border-black/[0.09] rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.18)] py-1 w-[220px] z-50">
               {[
-                { label:'Edit profile',    icon:'', action:() => { setEditOpen(true); setMenuOpen(false) } },
-                { label:'Add post / photo',icon:'', action:() => { setAddPostOpen(true); setMenuOpen(false) } },
-                { label:'Find a connection',icon:'', action:() => navigate('/connection') },
-                { label:'Log out',         icon:'', action:() => { logout(); navigate('/') }, danger:true },
+                {
+                  label: 'Edit profile',
+                  icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M9.5 2.5l2 2L4 12H2v-2l7.5-7.5z"/></svg>,
+                  action: () => { setEditOpen(true); setMenuOpen(false) }
+                },
+                {
+                  label: 'Add post',
+                  icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1" y="1" width="12" height="12" rx="2"/><path d="M7 4v6M4 7h6"/></svg>,
+                  action: () => { setAddPostOpen(true); setMenuOpen(false) }
+                },
+                {
+                  label: 'Buy credits',
+                  icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M5 5.5h3a1 1 0 010 2H6a1 1 0 000 2h3"/></svg>,
+                  action: () => { navigate('/credits'); setMenuOpen(false) }
+                },
+                {
+                  label: 'Find a connection',
+                  icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="6" cy="6" r="4"/><path d="M10.5 10.5l2 2"/></svg>,
+                  action: () => navigate('/connection')
+                },
+                {
+                  label: 'Log out',
+                  icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M5 2H2v10h3M9 10l3-3-3-3M12 7H6"/></svg>,
+                  action: () => { logout(); navigate('/') },
+                  danger: true
+                },
               ].map(item => (
                 <button key={item.label} onClick={item.action}
-                  className={`w-full flex items-center gap-3 px-4 py-[10px] text-[13px] font-medium bg-transparent border-none cursor-pointer text-left hover:bg-black/5 transition-all ${item.danger ? 'text-red-500' : 'text-[#1A1410]'}`}>
-                  <span>{item.icon}</span> {item.label}
+                  className={`w-full flex items-center gap-3 px-4 py-[10px] text-[13px] font-medium bg-transparent border-none cursor-pointer text-left hover:bg-black/[0.04] transition-all
+                    ${item.danger ? 'text-red-500' : 'text-[#1A1410]'}`}>
+                  <span className={item.danger ? 'text-red-500' : 'text-[#7A6E5C]'}>{item.icon}</span>
+                  {item.label}
                 </button>
               ))}
             </div>
@@ -272,7 +338,7 @@ export default function Profile() {
             {tab === 'sessions' && (
               <div className="mt-5 flex flex-col gap-3">
                 <div className="bg-[#ECEEF8] rounded-xl p-4 text-[13px] text-[#252840] font-medium mb-2">
-                   Sessions are timed skill exchanges started in Chat. Each minute you teach = +1 credit. Each minute you learn = −1 credit.
+                  ⚡ Sessions are timed skill exchanges started in Chat. Each minute you teach = +1 credit. Each minute you learn = −1 credit.
                 </div>
                 {[
                   { partner:'Léa Arnaud', skill:'Maths → English', date:'27 Apr', duration:'1h', credits:'+60', rating:5, type:'taught' },
@@ -287,7 +353,7 @@ export default function Profile() {
                     </div>
                     <div className="text-right">
                       <div className={`text-[13px] font-bold ${s.type==='taught' ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>{s.credits} credits</div>
-                      <div className="text-[11px] text-[#7A6E5C]">{''.repeat(s.rating)}</div>
+                      <div className="text-[11px] text-[#7A6E5C]">{'⭐'.repeat(s.rating)}</div>
                     </div>
                   </div>
                 ))}
@@ -300,14 +366,14 @@ export default function Profile() {
                 <p className="text-[13px] text-[#7A6E5C] mb-4">Badges are earned automatically based on your activity on SkillBridge.</p>
                 <div className="grid grid-cols-4 gap-4">
                   {[
-                    { label:'First session',  icon:'', earned:true,  desc:'Complete your first skill session' },
-                    { label:'100 credits',    icon:'', earned:true,  desc:'Earn 100 credits by teaching' },
-                    { label:'Top teacher',    icon:'', earned:true,  desc:'Get 5 ratings of 5 stars' },
-                    { label:'Group match',    icon:'', earned:false, desc:'Join a 3-person skill exchange' },
-                    { label:'200 credits',    icon:'', earned:false, desc:'Earn 200 credits total' },
-                    { label:'10 sessions',    icon:'', earned:false, desc:'Complete 10 sessions' },
-                    { label:'International',  icon:'', earned:false, desc:'Exchange with someone from another country' },
-                    { label:'Polyglot',       icon:'', earned:false, desc:'Teach 3 different skills' },
+                    { label:'First session',  icon:'🎯', earned:true,  desc:'Complete your first skill session' },
+                    { label:'100 credits',    icon:'💰', earned:true,  desc:'Earn 100 credits by teaching' },
+                    { label:'Top teacher',    icon:'⭐', earned:true,  desc:'Get 5 ratings of 5 stars' },
+                    { label:'Group match',    icon:'🔺', earned:false, desc:'Join a 3-person skill exchange' },
+                    { label:'200 credits',    icon:'🏆', earned:false, desc:'Earn 200 credits total' },
+                    { label:'10 sessions',    icon:'🔥', earned:false, desc:'Complete 10 sessions' },
+                    { label:'International',  icon:'🌍', earned:false, desc:'Exchange with someone from another country' },
+                    { label:'Polyglot',       icon:'💬', earned:false, desc:'Teach 3 different skills' },
                   ].map((b,i) => (
                     <div key={i} title={b.desc}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border cursor-help
@@ -325,7 +391,7 @@ export default function Profile() {
           <div className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl p-6 flex flex-col gap-4 sticky top-20">
             <h3 className="text-[14px] font-bold text-[#1A1410]">Your stats</h3>
             {[
-              { label:'Credits available', value:`${user?.credits ?? 120} `, color:'#252840' },
+              { label:'Credits available', value:`${user?.credits ?? 120} ⚡`, color:'#252840' },
               { label:'Sessions given',    value:'8',       color:'#3D5C28' },
               { label:'Sessions received', value:'5',       color:'#C8864B' },
               { label:'Reputation',        value:'4.8 / 5', color:'#252840' },
