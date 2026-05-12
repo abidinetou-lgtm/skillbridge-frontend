@@ -1,18 +1,26 @@
-// store/authStore.js
-// C'est ici qu'on stocke l'utilisateur connecté et son token JWT
-// Zustand = une variable globale que tous les composants peuvent lire
-
+// État global partagé entre tous les composants
+// "isLoggedIn" → les boutons login/signup disparaissent de la navbar
+// "openModal"  → ouvre le modal depuis n'importe quel bouton
+ 
 import { create } from 'zustand'
-
+ 
 const useAuthStore = create((set) => ({
-  user: null,    // Les infos de l'utilisateur connecté
-  token: null,   // Le token JWT reçu du backend
-
-  // Appeler cette fonction après un login réussi
-  login: (user, token) => set({ user, token }),
-
-  // Appeler cette fonction quand l'utilisateur se déconnecte
+  // Données utilisateur (null = pas connecté)
+  user: null,
+  token: null,
+ 
+  // État du modal auth
+  modalOpen: false,
+  modalMode: 'login', // 'login' ou 'register'
+ 
+  // Actions
+  login: (user, token) => set({ user, token, modalOpen: false }),
   logout: () => set({ user: null, token: null }),
+ 
+  openModal:  (mode = 'login') => set({ modalOpen: true,  modalMode: mode }),
+  closeModal: ()               => set({ modalOpen: false }),
+  switchMode: (mode)           => set({ modalMode: mode }),
 }))
-
+ 
 export default useAuthStore
+ 
