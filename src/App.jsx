@@ -10,6 +10,7 @@ import ConnectionPage from './pages/Connection'   // ← remplace Match
 import ProfilePage from './pages/Profile'
 import UserProfilePage from './pages/UserProfile'  // ← profil d'un autre user
 import RegisterPage from './pages/Register'
+import CreditsPage from './pages/Credits'
 import useAuthStore from './store/authStore'
 import CallScreen from './pages/CallScreen'
 
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/call" element={<ProtectedRoute><CallScreen /></ProtectedRoute>} />
         <Route path="/chat"         element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/profile"      element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/credits" element={<ProtectedRoute><CreditsPage /></ProtectedRoute>} />
         <Route path="/user/:id"     element={<UserProfilePage />} />
         {/* Redirect old /match → /connection */}
         <Route path="/match"        element={<Navigate to="/connection" replace />} />
