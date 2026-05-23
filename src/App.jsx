@@ -13,7 +13,7 @@ import RegisterPage from './pages/Register'
 import CreditsPage from './pages/Credits'
 import useAuthStore from './store/authStore'
 import CallScreen from './pages/CallScreen'
-
+import NotFound from './pages/notfound'
 // Route protégée — redirige vers / si non connecté
 function ProtectedRoute({ children }) {
   const { user } = useAuthStore()
@@ -30,7 +30,7 @@ export default function App() {
         <Route path="/"             element={<HomePage />} />
         <Route path="/register"     element={<RegisterPage />} />
         <Route path="/feed"         element={<FeedPage />} />
-        <Route path="/connection"   element={<ConnectionPage />} />
+        <Route path="/connection" element={<ProtectedRoute><ConnectionPage /></ProtectedRoute>} />
         {/* Routes protégées */}
         <Route path="/call" element={<ProtectedRoute><CallScreen /></ProtectedRoute>} />
         <Route path="/chat"         element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
@@ -39,6 +39,7 @@ export default function App() {
         <Route path="/user/:id"     element={<UserProfilePage />} />
         {/* Redirect old /match → /connection */}
         <Route path="/match"        element={<Navigate to="/connection" replace />} />
+        <Route path="*"             element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   )

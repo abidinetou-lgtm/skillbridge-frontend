@@ -17,13 +17,7 @@ export default function Navbar() {
 
   // "How it works" retiré — "Match" → "Connection"
   // Profile masqué si non connecté
-  const links = [
-    { to: '/',            label: 'Home',       public: true  },
-    { to: '/connection',  label: 'Connection', public: true  },
-    { to: '/feed',        label: 'Feed',       public: true  },
-    { to: '/chat',        label: 'Chat',       public: false },
-    { to: '/profile',     label: 'Profile',    public: false },
-  ]
+ 
 
   const visibleLinks = links.filter(l => l.public || !!user)
 
