@@ -1,26 +1,30 @@
-// État global partagé entre tous les composants
-// "isLoggedIn" → les boutons login/signup disparaissent de la navbar
-// "openModal"  → ouvre le modal depuis n'importe quel bouton
- 
+// src/store/authStore.js
 import { create } from 'zustand'
- 
+
 const useAuthStore = create((set) => ({
-  // Données utilisateur (null = pas connecté)
-  user: null,
-  token: null,
- 
-  // État du modal auth
+  user:      null,
+  token:     localStorage.getItem('sb_token') || null,
+  authReady: false,
+
   modalOpen: false,
-  modalMode: 'login', // 'login' ou 'register'
- 
-  // Actions
-  login: (user, token) => set({ user, token, modalOpen: false }),
-  logout: () => set({ user: null, token: null }),
- 
+  modalMode: 'login',
+
+  login: (user, token) => {
+    localStorage.setItem('sb_token', token)
+    set({ user, token, modalOpen: false, authReady: true })
+  },
+
+  logout: () => {
+    localStorage.removeItem('sb_token')
+    set({ user: null, token: null, authReady: true })
+  },
+
+  setUser:       (user) => set({ user, authReady: true }),
+  markAuthReady: ()     => set({ authReady: true }),
+
   openModal:  (mode = 'login') => set({ modalOpen: true,  modalMode: mode }),
   closeModal: ()               => set({ modalOpen: false }),
   switchMode: (mode)           => set({ modalMode: mode }),
 }))
- 
+
 export default useAuthStore
- 
