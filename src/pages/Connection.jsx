@@ -69,13 +69,19 @@ export default function Connection() {
   const [search, setSearch] = useState('')
   const [filterSkill, setFilterSkill] = useState('')
   const [requested, setRequested] = useState(new Set())
-
+const [showFilters, setShowFilters] = useState(false)
+const [filterCity, setFilterCity]   = useState('')
+const [filterDispo, setFilterDispo] = useState(false)
   const filtered = ALL_USERS.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase())
-    const matchSkill  = !filterSkill ||
-      u.teaches.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase())) ||
-      u.wants.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase()))
-    return matchSearch && matchSkill
+   const filtered = ALL_USERS.filter(u => {
+  const matchSearch = u.name.toLowerCase().includes(search.toLowerCase())
+  const matchSkill  = !filterSkill ||
+    u.teaches.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase())) ||
+    u.wants.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase()))
+  const matchCity   = !filterCity || u.city.toLowerCase().includes(filterCity.toLowerCase())
+  const matchDispo  = !filterDispo || u.dispo === true
+  return matchSearch && matchSkill && matchCity && matchDispo
+})
   })
 
   const handleRequest = (e, userId) => {
@@ -95,7 +101,7 @@ export default function Connection() {
         </h1>
 
         {/* Search */}
-        <div className="flex gap-3 max-w-[680px]">
+        <div className="flex gap-3 max-w-[680px] flex-wrap">
           <div className="relative flex-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7A6E5C]" width="16" height="16" viewBox="0 0 16 16" fill="none">
               <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"/>
@@ -113,7 +119,41 @@ export default function Connection() {
             onChange={e => setFilterSkill(e.target.value)}
             placeholder="Filter by skill..."
             className="w-[200px] px-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F4EA] text-[13px] text-[#1A1410] outline-none focus:border-[#252840] transition-all"
-          />
+          />{/* + button */}
+<button
+  onClick={() => setShowFilters(p => !p)}
+  className={`w-[42px] h-[42px] rounded-xl border-[1.5px] text-[20px] font-bold cursor-pointer transition-all flex items-center justify-center
+    ${showFilters ? 'bg-[#252840] text-white border-[#252840]' : 'bg-[#F8F4EA] text-[#252840] border-black/[0.09] hover:border-[#252840]'}`}>
+  +
+</button>
+
+{showFilters && (
+  <div className="w-full flex gap-3 flex-wrap items-center">
+    <input
+      value={filterCity}
+      onChange={e => setFilterCity(e.target.value)}
+      placeholder="Filter by city..."
+      className="w-[200px] px-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F4EA] text-[13px] text-[#1A1410] outline-none focus:border-[#252840] transition-all"
+    />
+    <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#1A1410] font-medium select-none">
+      <input
+        type="checkbox"
+        checked={filterDispo}
+        onChange={e => setFilterDispo(e.target.checked)}
+        className="w-4 h-4 accent-[#252840]"
+      />
+      Available now only
+    </label>
+    {(filterCity || filterDispo) && (
+      <button
+        onClick={() => { setFilterCity(''); setFilterDispo(false) }}
+        className="text-[12px] text-[#C8864B] font-semibold bg-transparent border-none cursor-pointer hover:underline">
+        Clear filters
+      </button>
+    )}
+  </div>
+)}
+          
         </div>
       </div>
 
