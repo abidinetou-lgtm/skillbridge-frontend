@@ -18,11 +18,11 @@ export default function Navbar() {
   // "How it works" retiré — "Match" → "Connection"
   // Profile masqué si non connecté
   const links = [
-    { to: '/',            label: 'Home',       public: true  },
-    { to: '/connection',  label: 'Connection', public: true  },
-    { to: '/feed',        label: 'Feed',       public: true  },
-    { to: '/chat',        label: 'Chat',       public: false },
-    { to: '/profile',     label: 'Profile',    public: false },
+   { to: '/connection',  label: 'Connection', public: true  },
+{ to: '/feed',        label: 'Feed',       public: true  },
+{ to: '/sessions',    label: 'Sessions',   public: false },
+{ to: '/chat',        label: 'Chat',       public: false },
+{ to: '/profile',     label: 'Profile',    public: false },
   ]
 
   const visibleLinks = links.filter(l => l.public || !!user)
@@ -73,7 +73,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             <Link to="/profile"
               className="w-8 h-8 rounded-full bg-[#252840] text-white text-xs font-bold flex items-center justify-center cursor-pointer no-underline hover:bg-[#363B6B] transition-all">
-              {user.prenom?.[0]?.toUpperCase() ?? 'U'}
+              {user.firstName?.[0]?.toUpperCase() ?? 'U'}
             </Link>
             <button onClick={() => { logout(); navigate('/') }}
               className={`bg-transparent border-none cursor-pointer text-[#7A6E5C] hover:text-[#1A1410] transition-all font-inter ${scrolled ? 'text-[11px]' : 'text-[12px]'}`}>
