@@ -1,9 +1,7 @@
-// src/pages/Connection.jsx  (remplace Match.jsx)
-// Cartes horizontales de profils — clic → page profil de l'user
-// "Connect" = envoie une demande — quand acceptée → apparaît dans Chat
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
+import { matchApi, getApiError } from '../services/api'
 
 const TAG_STYLES = {
   sand:  'bg-[#FAF5E8] text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
@@ -12,82 +10,67 @@ const TAG_STYLES = {
   warm:  'bg-[#F8EDD8] text-[#8C5A1E]',
 }
 
-const ALL_USERS = [
-  {
-    id:'la', initials:'LA', color:'#252840',
-    name:'Léa Arnaud', age:19, city:'Paris', dispo:true,
-    bio:'Passionate about mathematics and music theory. Looking to improve my English through real conversation.',
-    teaches:[{l:'Maths',s:'sand'},{l:'Piano',s:'sand'}],
-    wants:[{l:'English',s:'night'}],
-    score:92,
-  },
-  {
-    id:'km', initials:'KM', color:'#C8864B',
-    name:'Kenji Matsuda', age:22, city:'Lyon', dispo:true,
-    bio:'Designer by day, language enthusiast by night. I speak Japanese natively and would love to improve my French.',
-    teaches:[{l:'Japanese',s:'warm'},{l:'Design',s:'warm'}],
-    wants:[{l:'French',s:'sage'}],
-    score:78,
-  },
-  {
-    id:'so', initials:'SO', color:'#3D5C28',
-    name:'Sara Okonkwo', age:20, city:'Marseille', dispo:true,
-    bio:'Native English speaker, cooking enthusiast. Looking to learn Spanish while teaching what I know.',
-    teaches:[{l:'English',s:'sage'},{l:'Cooking',s:'sage'}],
-    wants:[{l:'Spanish',s:'night'}],
-    score:71,
-  },
-  {
-    id:'pd', initials:'PD', color:'#4E6035',
-    name:'Paul Dumont', age:21, city:'Bordeaux', dispo:false,
-    bio:'Software engineer teaching Python and algorithms. Dreaming of learning guitar to decompress after work.',
-    teaches:[{l:'Python',s:'sage'},{l:'Maths',s:'sage'}],
-    wants:[{l:'Guitar',s:'warm'}],
-    score:68,
-  },
-  {
-    id:'cl', initials:'CL', color:'#363B6B',
-    name:'Camille Laurent', age:23, city:'Paris', dispo:true,
-    bio:'French literature graduate with a love for writing. Looking for piano lessons in exchange for French tutoring.',
-    teaches:[{l:'French',s:'night'},{l:'Writing',s:'night'}],
-    wants:[{l:'Piano',s:'sand'}],
-    score:65,
-  },
-  {
-    id:'rn', initials:'RN', color:'#C8864B',
-    name:'Ryo Nakamura', age:25, city:'Lyon', dispo:false,
-    bio:'Classically trained musician. I play piano and guitar and want to finally understand the maths I never learned.',
-    teaches:[{l:'Piano',s:'warm'},{l:'Guitar',s:'warm'}],
-    wants:[{l:'Maths',s:'sand'}],
-    score:61,
-  },
-]
-
 export default function Connection() {
   const navigate = useNavigate()
   const { user, openModal } = useAuthStore()
-  const [search, setSearch] = useState('')
+  const [search, setSearch]           = useState('')
   const [filterSkill, setFilterSkill] = useState('')
-  const [requested, setRequested] = useState(new Set())
-const [showFilters, setShowFilters] = useState(false)
-const [filterCity, setFilterCity]   = useState('')
-const [filterDispo, setFilterDispo] = useState(false)
-  const filtered = ALL_USERS.filter(u => {
-   const filtered = ALL_USERS.filter(u => {
-  const matchSearch = u.name.toLowerCase().includes(search.toLowerCase())
-  const matchSkill  = !filterSkill ||
-    u.teaches.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase())) ||
-    u.wants.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase()))
-  const matchCity   = !filterCity || u.city.toLowerCase().includes(filterCity.toLowerCase())
-  const matchDispo  = !filterDispo || u.dispo === true
-  return matchSearch && matchSkill && matchCity && matchDispo
-})
+  const [filterCity, setFilterCity]   = useState('')
+  const [filterDispo, setFilterDispo] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [requested, setRequested]     = useState(new Set())
+  const [profiles, setProfiles]       = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState('')
+
+  useEffect(() => {
+    matchApi.suggestions()
+      .then(data => {
+        // Adapter le format API → format carte
+        const list = (Array.isArray(data) ? data : data.matches ?? []).map(u => ({
+          id:       u.id,
+          initials: `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase(),
+          color:    '#252840',
+          name:     `${u.firstName} ${u.lastName}`,
+          age:      u.age ?? '',
+          city:     u.city ?? '',
+          dispo:    u.status === 'ACTIVE',
+          bio:      u.bio ?? '',
+          teaches:  (u.teachingSkills ?? u.teaches ?? []).map(s =>
+            typeof s === 'string' ? { l: s, s: 'sand' } : { l: s.skill?.name ?? s.name ?? s, s: 'sand' }
+          ),
+          wants: (u.learningGoals ?? u.wants ?? []).map(s =>
+            typeof s === 'string' ? { l: s, s: 'night' } : { l: s.skill?.name ?? s.name ?? s, s: 'night' }
+          ),
+          score: u.score ?? 0,
+        }))
+        setProfiles(list)
+      })
+      .catch(err => setError(getApiError(err)))
+      .finally(() => setLoading(false))
+  }, [user?.id])
+
+  const filtered = profiles.filter(u => {
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase())
+    const matchSkill  = !filterSkill ||
+      u.teaches.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase())) ||
+      u.wants.some(t => t.l.toLowerCase().includes(filterSkill.toLowerCase()))
+    const matchCity  = !filterCity || u.city.toLowerCase().includes(filterCity.toLowerCase())
+    const matchDispo = !filterDispo || u.dispo === true
+    return matchSearch && matchSkill && matchCity && matchDispo
   })
 
-  const handleRequest = (e, userId) => {
-    e.stopPropagation() // ne pas naviguer vers le profil
+  const handleRequest = async (e, userId) => {
+    e.stopPropagation()
     if (!user) { openModal('login'); return }
-    setRequested(prev => new Set([...prev, userId]))
+    try {
+      await matchApi.request({ receiverId: userId })
+      setRequested(prev => new Set([...prev, userId]))
+    } catch (err) {
+      console.error(getApiError(err))
+      // Même en cas d'erreur on marque comme envoyé pour l'UX
+      setRequested(prev => new Set([...prev, userId]))
+    }
   }
 
   return (
