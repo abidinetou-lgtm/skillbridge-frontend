@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
 
 const ALL_SKILLS = [
+
   'Mathematics','English','French','Spanish','Japanese','Chinese','Arabic',
   'Guitar','Piano','Drums','Singing','Drawing','Painting','Photography',
   'Python','JavaScript','Design','Video editing','Cooking','Yoga',
@@ -17,6 +18,9 @@ export default function Register() {
   const navigate = useNavigate()
   const { login } = useAuthStore()
   const [step, setStep] = useState(0)
+const [customSkill, setCustomSkill] = useState('')
+const [customSkills, setCustomSkills] = useState([])
+const [showCustomInput, setShowCustomInput] = useState(false)
   const [avatar, setAvatar] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [form, setForm] = useState({
@@ -28,10 +32,21 @@ export default function Register() {
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  const toggleSkill = (skill, type) => {
-    const arr = form[type]
-    set(type, arr.includes(skill) ? arr.filter(s => s !== skill) : [...arr, skill])
-  }
+  const allSkills = [...ALL_SKILLS, ...customSkills]
+
+const toggleSkill = (skill, type) => {
+  const arr = form[type]
+  set(type, arr.includes(skill) ? arr.filter(s => s !== skill) : [...arr, skill])
+}
+
+const addCustomSkill = (type) => {
+  const trimmed = customSkill.trim()
+  if (!trimmed || allSkills.includes(trimmed)) return
+  setCustomSkills(p => [...p, trimmed])
+  set(type, [...form[type], trimmed])
+  setCustomSkill('')
+  setShowCustomInput(false)
+}
 
   const handleAvatar = (e) => {
     const file = e.target.files[0]
@@ -167,7 +182,7 @@ export default function Register() {
                   I can teach ({form.teaches.length} selected)
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {ALL_SKILLS.map(skill => (
+                  {allSkills.map(skill => (
                     <button key={skill} onClick={() => toggleSkill(skill, 'teaches')}
                       className={`px-3 py-[6px] rounded-full text-[12px] font-semibold border-[1.5px] cursor-pointer transition-all
                         ${form.teaches.includes(skill)
@@ -177,6 +192,29 @@ export default function Register() {
                       {skill}
                     </button>
                   ))}
+                  {showCustomInput ? (
+  <div className="flex gap-2 items-center">
+    <input autoFocus value={customSkill}
+      onChange={e => setCustomSkill(e.target.value)}
+      onKeyDown={e => e.key === 'Enter' && addCustomSkill('teaches')}
+      placeholder="Add a skill..."
+      className="px-3 py-[6px] rounded-full text-[12px] border-[1.5px] border-[#252840] outline-none w-[130px]"
+    />
+    <button onClick={() => addCustomSkill('teaches')}
+      className="px-3 py-[6px] rounded-full text-[12px] font-bold bg-[#252840] text-white border-none cursor-pointer">
+      Add
+    </button>
+    <button onClick={() => setShowCustomInput(false)}
+      className="px-3 py-[6px] rounded-full text-[12px] text-[#7A6E5C] border-[1.5px] border-black/[0.12] bg-transparent cursor-pointer">
+      Cancel
+    </button>
+  </div>
+) : (
+  <button onClick={() => setShowCustomInput(true)}
+    className="px-3 py-[6px] rounded-full text-[12px] font-bold border-[1.5px] border-dashed border-[#252840] text-[#252840] bg-transparent cursor-pointer hover:bg-[#252840] hover:text-white transition-all">
+    + Add
+  </button>
+)}
                 </div>
               </div>
 
@@ -185,7 +223,7 @@ export default function Register() {
                   I want to learn ({form.wants.length} selected)
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {ALL_SKILLS.map(skill => (
+                  {allSkills.map(skill => (
                     <button key={skill} onClick={() => toggleSkill(skill, 'wants')}
                       className={`px-3 py-[6px] rounded-full text-[12px] font-semibold border-[1.5px] cursor-pointer transition-all
                         ${form.wants.includes(skill)
@@ -195,6 +233,29 @@ export default function Register() {
                       {skill}
                     </button>
                   ))}
+                  {showCustomInput ? (
+  <div className="flex gap-2 items-center">
+    <input autoFocus value={customSkill}
+      onChange={e => setCustomSkill(e.target.value)}
+      onKeyDown={e => e.key === 'Enter' && addCustomSkill('wants')}
+      placeholder="Add a skill..."
+      className="px-3 py-[6px] rounded-full text-[12px] border-[1.5px] border-[#3D5C28] outline-none w-[130px]"
+    />
+    <button onClick={() => addCustomSkill('wants')}
+      className="px-3 py-[6px] rounded-full text-[12px] font-bold bg-[#3D5C28] text-white border-none cursor-pointer">
+      Add
+    </button>
+    <button onClick={() => setShowCustomInput(false)}
+      className="px-3 py-[6px] rounded-full text-[12px] text-[#7A6E5C] border-[1.5px] border-black/[0.12] bg-transparent cursor-pointer">
+      Cancel
+    </button>
+  </div>
+) : (
+  <button onClick={() => setShowCustomInput(true)}
+    className="px-3 py-[6px] rounded-full text-[12px] font-bold border-[1.5px] border-dashed border-[#3D5C28] text-[#3D5C28] bg-transparent cursor-pointer hover:bg-[#3D5C28] hover:text-white transition-all">
+    + Add
+  </button>
+)}
                 </div>
               </div>
 
