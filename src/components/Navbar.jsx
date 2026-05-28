@@ -18,11 +18,12 @@ export default function Navbar() {
   // "How it works" retiré — "Match" → "Connection"
   // Profile masqué si non connecté
   const links = [
-   { to: '/connection',  label: 'Connection', public: true  },
-{ to: '/feed',        label: 'Feed',       public: true  },
-{ to: '/sessions',    label: 'Sessions',   public: false },
-{ to: '/chat',        label: 'Chat',       public: false },
-{ to: '/profile',     label: 'Profile',    public: false },
+    { to: '/connection',    label: 'Connexion',       public: true  },
+    { to: '/feed',          label: 'Feed',             public: true  },
+    { to: '/sessions',      label: 'Sessions',         public: false },
+    { to: '/chat',          label: 'Chat',             public: false },
+    { to: '/become-sharer', label: 'Devenir Donneur',  public: false },
+    { to: '/profile',       label: 'Profil',           public: false },
   ]
 
   const visibleLinks = links.filter(l => l.public || !!user)

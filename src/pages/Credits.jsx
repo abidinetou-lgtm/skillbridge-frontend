@@ -26,13 +26,17 @@ export default function Credits() {
   if (paid) return (
     <main className="pt-[62px] min-h-screen bg-[#F8F4EA] flex items-center justify-center">
       <div className="bg-[#FDFAF4] rounded-2xl border border-black/[0.09] p-10 max-w-[420px] w-full text-center flex flex-col items-center gap-4">
-        <div className="text-[64px]">🎉</div>
+        <div className="w-16 h-16 rounded-full bg-[#3D5C28]/20 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#3D5C28" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M5 14l6 6L23 8"/>
+          </svg>
+        </div>
         <h2 className="text-[24px] font-black text-[#1A1410]">Credits added!</h2>
         <p className="text-[14px] text-[#7A6E5C]">
           <strong>{pack.credits} credits</strong> ({pack.hours}) have been added to your account.
         </p>
         <div className="bg-[#E4EED8] rounded-xl px-6 py-3 text-[13px] font-semibold text-[#3D5C28]">
-          ⚡ {(user?.credits ?? 120) + pack.credits} credits now available
+          {(user?.credits ?? 120) + pack.credits} crédits disponibles
         </div>
         <button onClick={() => navigate('/profile')}
           className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all mt-2">
@@ -49,7 +53,7 @@ export default function Credits() {
         <h1 className="text-[38px] font-black tracking-[-1.5px] text-[#1A1410] leading-[1.05] mb-1">
           Top up your <span className="text-[#252840]">credits</span>
         </h1>
-        <p className="text-[14px] text-[#7A6E5C]">1 credit = 1 minute of learning. You currently have <strong>{user?.credits ?? 120} ⚡</strong></p>
+        <p className="text-[14px] text-[#7A6E5C]">1 crédit = 1 minute d'apprentissage. Vous avez <strong>{user?.credits ?? 120} crédits</strong></p>
       </div>
 
       <div className="px-20 py-10 max-w-[900px]">

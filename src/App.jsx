@@ -14,6 +14,7 @@ import RegisterPage  from './pages/Register'
 import Sessions      from './pages/Sessions'
 import NewSession    from './pages/NewSession'
 import SessionRoom   from './pages/SessionRoom'
+import BecomeSharer  from './pages/BecomeSharer'
 import useAuthStore  from './store/authStore'
 import { authApi }   from './services/api'
 
@@ -51,7 +52,8 @@ export default function App() {
         <Route path="/profile"    element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/sessions"   element={<ProtectedRoute><Sessions /></ProtectedRoute>} />
         <Route path="/sessions/new" element={<ProtectedRoute><NewSession /></ProtectedRoute>} />
-        <Route path="/sessions/:id" element={<ProtectedRoute><SessionRoom /></ProtectedRoute>} />
+        <Route path="/sessions/:id"   element={<ProtectedRoute><SessionRoom /></ProtectedRoute>} />
+        <Route path="/become-sharer" element={<ProtectedRoute><BecomeSharer /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

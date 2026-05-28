@@ -1,5 +1,5 @@
 // src/pages/NewSession.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
@@ -12,6 +12,7 @@ export default function NewSession() {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [connections, setConnections] = useState([])
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -22,19 +23,42 @@ export default function NewSession() {
     creditsPerMin: 1,
     studentId: params.get('with') || '',
     studentName: params.get('name') || '',
+    isOpen: false,
+    maxParticipants: 3,
   })
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
+  // Load accepted connections to use as student picker
+  useEffect(() => {
+    if (!user) return
+    api.get('/matches/mine')
+      .then(res => {
+        const matches = res.data.matches || []
+        const accepted = matches
+          .filter(m => m.status === 'ACCEPTED')
+          .map(m => {
+            const other = m.requesterId === user.id ? m.receiver : m.requester
+            return { id: other.id, name: `${other.firstName} ${other.lastName}` }
+          })
+        setConnections(accepted)
+      })
+      .catch(() => {})
+  }, [user])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!form.studentId) { setError('Please select a student'); return }
     setError('')
     setLoading(true)
     try {
-      // TODO API: POST /api/sessions
-      const res = await api.post('/api/sessions', { ...form, teacherId: user.id })
-      navigate(`/sessions/${res.data.session.id}`)
-      // Démo : navigation directe
+      const scheduledAt = new Date(`${form.date}T${form.time}:00`).toISOString()
+      await api.post('/sessions', {
+        learnerId:         form.studentId,
+        title:             form.title,
+        estimatedDuration: form.duration,
+        scheduledAt,
+      })
       navigate('/sessions')
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create session')
@@ -81,9 +105,27 @@ export default function NewSession() {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Student (connection)</label>
-              <input className={inputClass} placeholder="Search a connection..."
-                value={form.studentName} onChange={e => set('studentName', e.target.value)} />
+              <label className={labelClass}>Receveur (vos pairs connectés)</label>
+              {connections.length === 0 ? (
+                <div className={`${inputClass} text-[#B0A898]`}>
+                  No accepted connections yet
+                </div>
+              ) : (
+                <select
+                  className={inputClass}
+                  value={form.studentId}
+                  onChange={e => {
+                    const selected = connections.find(c => c.id === e.target.value)
+                    set('studentId', e.target.value)
+                    set('studentName', selected?.name || '')
+                  }}
+                  required>
+                  <option value="">Select a student…</option>
+                  {connections.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -113,15 +155,51 @@ export default function NewSession() {
             </div>
           </div>
 
+          {/* Group session toggle */}
+          <div className="flex items-start gap-4 bg-[#F8F8F8] rounded-xl px-5 py-4 border border-black/[0.07]">
+            <input
+              type="checkbox"
+              id="isOpen"
+              checked={form.isOpen}
+              onChange={e => set('isOpen', e.target.checked)}
+              className="mt-[2px] w-4 h-4 accent-[#252840] cursor-pointer"
+            />
+            <div className="flex-1">
+              <label htmlFor="isOpen" className="text-[13px] font-bold text-[#1A1410] cursor-pointer">
+                Session ouverte à plusieurs receveurs
+              </label>
+              <p className="text-[12px] text-[#7A6E5C] mt-[2px]">
+                Les crédits sont divisés entre les participants.
+              </p>
+              {form.isOpen && (
+                <div className="mt-3">
+                  <label className={labelClass}>Nombre max de participants</label>
+                  <select
+                    className={`${inputClass} w-[160px]`}
+                    value={form.maxParticipants}
+                    onChange={e => set('maxParticipants', Number(e.target.value))}
+                  >
+                    {[2,3,4,5,6,8,10].map(n => <option key={n} value={n}>{n} participants</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="bg-[#ECEEF8] rounded-xl px-5 py-4">
-            <p className="text-[13px] font-bold text-[#252840] mb-1">Session cost estimate</p>
+            <p className="text-[13px] font-bold text-[#252840] mb-1">Estimation du coût</p>
             <p className="text-[12px] text-[#7A6E5C]">
-              Total: <strong className="text-[#252840]">{form.duration * form.creditsPerMin} credits</strong>
-              &nbsp;({form.duration} min × {form.creditsPerMin} credit/min)
+              Total: <strong className="text-[#252840]">{form.duration * form.creditsPerMin} crédits</strong>
+              &nbsp;({form.duration} min × {form.creditsPerMin} crédit/min)
+              {form.isOpen && (
+                <span className="ml-2 text-[#C8864B]">
+                  · {Math.ceil((form.duration * form.creditsPerMin) / form.maxParticipants)} cr/participant
+                </span>
+              )}
             </p>
           </div>
 
-          <button type="submit" disabled={loading}
+          <button type="submit" disabled={loading || !form.studentId}
             className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50 mt-2">
             {loading ? 'Creating…' : 'Create session'}
           </button>

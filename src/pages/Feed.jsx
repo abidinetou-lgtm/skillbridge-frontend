@@ -1,29 +1,42 @@
-// src/pages/Feed.jsx
+// src/pages/Feed.jsx — Fil communautaire nettoyé, posts réels uniquement
 import { useState } from 'react'
+import useAuthStore from '../store/authStore'
+import { useNavigate } from 'react-router-dom'
 
-const TAG_STYLES = {
-  sand:  'bg-[#FAF5E8] text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
-  night: 'bg-[#ECEEF8] text-[#252840]',
-  sage:  'bg-[#E4EED8] text-[#3D5C28]',
-  warm:  'bg-[#F8EDD8] text-[#8C5A1E]',
-}
-
-const ALL_POSTS = [
-  { id:1, initials:'LA', color:'#252840', author:'Léa Arnaud',   time:'2h ago',     text:'First math session — finally understood derivatives! Thank you SkillBridge.', tags:[{l:'Maths',s:'sand'},{l:'Session',s:'night'}], likes:24, comments:5  },
-  { id:2, initials:'KM', color:'#C8864B', author:'Kenji Matsuda',time:'5h ago',     text:'Learned homemade ramen in exchange for a Japanese lesson. Best deal ever.',   tags:[{l:'Japanese',s:'warm'},{l:'Cooking',s:'warm'}], likes:41, comments:12 },
-  { id:3, initials:'SO', color:'#3D5C28', author:'Sara Okonkwo', time:'Yesterday',  text:'60 credits earned this week — 3 English sessions given. Love this system!',   tags:[{l:'English',s:'sage'},{l:'Credits',s:'sage'}], likes:18, comments:3  },
-  { id:4, initials:'TR', color:'#363B6B', author:'Thomas R.',    time:'2 days ago', text:'Matched with 3 people this week. Group learning is something else.',           tags:[{l:'Match x3',s:'night'}], likes:33, comments:7  },
-  { id:5, initials:'AM', color:'#B07030', author:'Amira M.',     time:'3 days ago', text:'Taught Arabic calligraphy, learned guitar chords. This platform is magic.',    tags:[{l:'Arabic',s:'warm'},{l:'Guitar',s:'sand'}], likes:56, comments:9  },
-  { id:6, initials:'PD', color:'#4E6035', author:'Paul D.',      time:'4 days ago', text:'Just hit 200 credits! Thanks to everyone who took my Python sessions.',        tags:[{l:'Python',s:'sage'},{l:'Credits',s:'sage'}], likes:72, comments:14 },
-  { id:7, initials:'CL', color:'#252840', author:'Camille L.',   time:'5 days ago', text:'Taught French for the first time. My student was amazing and so patient.',     tags:[{l:'French',s:'night'},{l:'Teaching',s:'night'}], likes:29, comments:6  },
-  { id:8, initials:'RN', color:'#C8864B', author:'Ryo N.',       time:'1 week ago', text:'3-person match finally available — I teach piano, learn maths, teach guitar.', tags:[{l:'Piano',s:'warm'},{l:'Match x3',s:'warm'}], likes:88, comments:21 },
-]
-
-const FILTERS = ['All', 'Maths', 'Languages', 'Music', 'Tech', 'Cooking', 'Credits']
+const FILTERS = ['Tout', 'Langues', 'Musique', 'Tech', 'Sciences', 'Bien-être']
 
 export default function Feed() {
-  const [filter, setFilter] = useState('All')
-  const [liked, setLiked] = useState(new Set())
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
+
+  const [filter,      setFilter]   = useState('Tout')
+  const [posts,       setPosts]    = useState([])
+  const [addOpen,     setAddOpen]  = useState(false)
+  const [newText,     setNewText]  = useState('')
+  const [newTag,      setNewTag]   = useState('')
+  const [liked,       setLiked]    = useState(new Set())
+
+  const initials = user
+    ? `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? ''}`.toUpperCase()
+    : 'U'
+
+  const addPost = () => {
+    if (!newText.trim()) return
+    setPosts(p => [{
+      id:       Date.now(),
+      initials,
+      color:    '#252840',
+      author:   `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || 'Moi',
+      time:     'À l\'instant',
+      text:     newText.trim(),
+      tags:     newTag.trim() ? [newTag.trim()] : [],
+      likes:    0,
+      comments: 0,
+    }, ...p])
+    setNewText('')
+    setNewTag('')
+    setAddOpen(false)
+  }
 
   const toggleLike = (id) => {
     setLiked(prev => {
@@ -37,97 +50,152 @@ export default function Feed() {
     <main className="pt-[62px] min-h-screen bg-[#F8F4EA]">
 
       {/* Header */}
-      <div className="bg-[#FDFAF4] border-b border-black/[0.09] px-20 py-10">
-        <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Community</p>
+      <div className="bg-[#FDFAF4] border-b border-black/[0.09] px-8 md:px-20 py-10">
+        <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Communauté</p>
         <h1 className="text-[38px] font-black tracking-[-1.5px] text-[#1A1410] leading-[1.05]">
-          What members <span className="text-[#252840]">share</span>
+          Ce que les membres <span className="text-[#252840]">partagent</span>
         </h1>
-        <p className="text-[14px] text-[#7A6E5C] mt-2">Progress, tips and discoveries from the SkillBridge community.</p>
+        <p className="text-[14px] text-[#7A6E5C] mt-2">
+          Progrès, découvertes et échanges de la communauté SkillBridge.
+        </p>
       </div>
 
-      <div className="px-20 py-8">
-        {/* Filters */}
-        <div className="flex gap-2 flex-wrap mb-8">
+      <div className="px-8 md:px-20 py-8 max-w-[860px]">
+
+        {/* Filtres */}
+        <div className="flex gap-2 flex-wrap mb-6">
           {FILTERS.map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-full text-[13px] font-semibold border-[1.5px] transition-all cursor-pointer
+              className={`px-4 py-2 rounded-full text-[13px] font-semibold border-[1.5px] cursor-pointer transition-all
                 ${filter === f
                   ? 'bg-[#252840] text-white border-[#252840]'
-                  : 'bg-transparent text-[#7A6E5C] border-black/[0.09] hover:border-[#1A1410] hover:text-[#1A1410]'
-                }`}
-            >
+                  : 'bg-transparent text-[#7A6E5C] border-black/[0.09] hover:border-[#1A1410] hover:text-[#1A1410]'}`}>
               {f}
             </button>
           ))}
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-3 gap-5">
-          {ALL_POSTS.map(post => (
-            <div key={post.id}
-              className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl overflow-hidden hover:-translate-y-1 hover:shadow-lg transition-all cursor-pointer"
-            >
-              {/* Thumb */}
-              <div className="h-[160px] flex items-center justify-center"
-                style={{ background: `${post.color}12` }}>
-                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                  <rect x="12" y="14" width="38" height="48" rx="5" fill={post.color} opacity=".15"/>
-                  <path d="M20 30h22M20 38h18M20 46h20" stroke={post.color} strokeWidth="2" strokeLinecap="round"/>
-                  <circle cx="58" cy="58" r="12" fill={post.color} opacity=".12"/>
-                  <path d="M54 58l3 3 6-6" stroke={post.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
+        {/* Bouton Ajouter */}
+        {user && (
+          <button onClick={() => setAddOpen(true)}
+            className="w-full bg-white border-[1.5px] border-black/[0.09] rounded-2xl px-5 py-4 flex items-center gap-3 mb-6 cursor-pointer hover:border-[#252840] transition-all text-left">
+            <div className="w-9 h-9 rounded-full bg-[#252840] text-white flex items-center justify-center font-bold text-[13px] flex-shrink-0">
+              {initials}
+            </div>
+            <span className="text-[14px] text-[#B0A898]">Partagez une découverte, un progrès…</span>
+            <svg className="ml-auto text-[#7A6E5C]" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M8 1v14M1 8h14"/>
+            </svg>
+          </button>
+        )}
 
-              <div className="p-4 flex flex-col gap-3">
-                {/* Author */}
-                <div className="flex gap-2 items-center">
-                  <div className="w-7 h-7 rounded-full text-[10px] font-bold text-white flex items-center justify-center flex-shrink-0"
+        {/* Modal nouveau post */}
+        {addOpen && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+            onClick={e => e.target === e.currentTarget && setAddOpen(false)}>
+            <div className="bg-white rounded-2xl p-7 w-full max-w-[500px]">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-[18px] font-black text-[#1A1410]">Nouveau post</h2>
+                <button onClick={() => setAddOpen(false)}
+                  className="w-8 h-8 rounded-full bg-black/[0.06] border-none cursor-pointer text-[#7A6E5C] flex items-center justify-center hover:bg-black/10 transition-all">
+                  ✕
+                </button>
+              </div>
+              <textarea
+                value={newText} onChange={e => setNewText(e.target.value)}
+                placeholder="Partagez votre progression, une astuce ou une pensée…"
+                className="w-full px-4 py-3 rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F8F8] text-[14px] outline-none focus:border-[#252840] transition-all resize-none h-28 mb-3"
+                autoFocus
+              />
+              <div className="mb-4">
+                <input
+                  value={newTag} onChange={e => setNewTag(e.target.value)}
+                  placeholder="Compétence liée (ex: Python, Guitare…)"
+                  className="w-full px-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F8F8] text-[13px] outline-none focus:border-[#252840] transition-all"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setAddOpen(false)}
+                  className="flex-1 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[13px] font-semibold text-[#7A6E5C] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all">
+                  Annuler
+                </button>
+                <button onClick={addPost} disabled={!newText.trim()}
+                  className="flex-1 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-40">
+                  Publier
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Liste des posts */}
+        {posts.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-2xl border border-black/[0.09]">
+            <div className="w-14 h-14 rounded-2xl bg-[#ECEEF8] flex items-center justify-center mx-auto mb-4">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <p className="text-[16px] font-semibold text-[#1A1410] mb-2">Aucun post pour l'instant</p>
+            <p className="text-[13px] text-[#7A6E5C] mb-5 max-w-[320px] mx-auto">
+              Soyez le premier à partager votre progression ou une découverte.
+            </p>
+            {user ? (
+              <button onClick={() => setAddOpen(true)}
+                className="px-5 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+                Écrire un post
+              </button>
+            ) : (
+              <button onClick={() => navigate('/')}
+                className="px-5 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+                Rejoindre SkillBridge
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {posts.map(post => (
+              <article key={post.id} className="bg-white rounded-2xl border border-black/[0.09] p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[14px] text-white flex-shrink-0"
                     style={{ background: post.color }}>
                     {post.initials}
                   </div>
-                  <span className="text-[13px] font-semibold text-[#1A1410]">{post.author}</span>
-                  <span className="text-[10px] text-[#7A6E5C] ml-auto">{post.time}</span>
+                  <div>
+                    <p className="text-[14px] font-bold text-[#1A1410]">{post.author}</p>
+                    <p className="text-[11px] text-[#7A6E5C]">{post.time}</p>
+                  </div>
                 </div>
 
-                <p className="text-[13px] text-[#3D3020] leading-[1.5]">{post.text}</p>
+                <p className="text-[14px] text-[#3D3020] leading-[1.65] mb-3">{post.text}</p>
 
-                <div className="flex gap-[5px] flex-wrap">
-                  {post.tags.map(t => (
-                    <span key={t.l} className={`px-[10px] py-1 rounded-full text-xs font-semibold ${TAG_STYLES[t.s]}`}>{t.l}</span>
-                  ))}
-                </div>
+                {post.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {post.tags.map(tag => (
+                      <span key={tag} className="px-2 py-[3px] rounded-full bg-[#ECEEF8] text-[#252840] text-[11px] font-semibold">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
-                {/* Actions */}
-                <div className="flex gap-3 pt-1 border-t border-black/[0.06]">
+                <div className="flex items-center gap-4 pt-3 border-t border-black/[0.06]">
                   <button onClick={() => toggleLike(post.id)}
-                    className={`flex items-center gap-1 text-[12px] font-medium transition-all cursor-pointer bg-transparent border-none
-                      ${liked.has(post.id) ? 'text-red-500' : 'text-[#7A6E5C] hover:text-red-400'}`}>
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill={liked.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8">
-                      <path d="M7 12s-6-3.5-6-7a3 3 0 016 0 3 3 0 016 0c0 3.5-6 7-6 7z" strokeLinejoin="round"/>
+                    className={`flex items-center gap-2 text-[12px] font-semibold bg-transparent border-none cursor-pointer transition-all
+                      ${liked.has(post.id) ? 'text-[#C8864B]' : 'text-[#7A6E5C] hover:text-[#1A1410]'}`}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill={liked.has(post.id) ? '#C8864B' : 'none'} stroke="currentColor" strokeWidth="1.5">
+                      <path d="M7 12S1 8.5 1 4.5a3 3 0 0 1 6-1 3 3 0 0 1 6 1C13 8.5 7 12 7 12z"/>
                     </svg>
                     {post.likes + (liked.has(post.id) ? 1 : 0)}
                   </button>
-                  <button className="flex items-center gap-1 text-[12px] font-medium text-[#7A6E5C] hover:text-[#252840] transition-all cursor-pointer bg-transparent border-none">
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M1 1h12v8H8l-1 4-1-4H1z" strokeLinejoin="round"/>
-                    </svg>
-                    {post.comments}
-                  </button>
-                  <button className="ml-auto text-[12px] font-medium text-[#7A6E5C] hover:text-[#252840] transition-all cursor-pointer bg-transparent border-none">
-                    Share
-                  </button>
+                  <span className="text-[12px] text-[#7A6E5C]">
+                    {post.comments} commentaire{post.comments !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Load more */}
-        <div className="flex justify-center mt-10">
-          <button className="px-8 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[13px] font-semibold text-[#1A1410] bg-transparent cursor-pointer hover:bg-[#1A1410] hover:text-white transition-all">
-            Load more posts
-          </button>
-        </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )
