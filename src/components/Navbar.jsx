@@ -73,7 +73,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             <Link to="/profile"
               className="w-8 h-8 rounded-full bg-[#252840] text-white text-xs font-bold flex items-center justify-center cursor-pointer no-underline hover:bg-[#363B6B] transition-all">
-              {user.prenom?.[0]?.toUpperCase() ?? 'U'}
+              {user.firstName?.[0]?.toUpperCase() ?? 'U'}
             </Link>
             <button onClick={() => { logout(); navigate('/') }}
               className={`bg-transparent border-none cursor-pointer text-[#7A6E5C] hover:text-[#1A1410] transition-all font-inter ${scrolled ? 'text-[11px]' : 'text-[12px]'}`}>

@@ -1,6 +1,5 @@
 // src/components/CookieBanner.jsx
 // S'affiche une seule fois au premier chargement du site
-// Dev 2 pourra plus tard sauvegarder ce choix en base de données
  
 import { useState, useEffect } from 'react'
  

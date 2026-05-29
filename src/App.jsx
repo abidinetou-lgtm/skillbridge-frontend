@@ -1,5 +1,6 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import Navbar from './components/Navbar'
 import CookieBanner from './components/CookieBanner'
 import AuthModal from './components/AuthModal'
@@ -12,14 +13,39 @@ import UserProfilePage from './pages/UserProfile'  // ← profil d'un autre user
 import RegisterPage from './pages/Register'
 import useAuthStore from './store/authStore'
 import CallScreen from './pages/CallScreen'
+import { authApi } from './services/api'
 
 // Route protégée — redirige vers / si non connecté
 function ProtectedRoute({ children }) {
-  const { user } = useAuthStore()
+  const { user, authReady } = useAuthStore()
+  if (!authReady) return null
   return user ? children : <Navigate to="/" replace />
 }
 
 export default function App() {
+  const { token, setUser, logout, markAuthReady } = useAuthStore()
+
+  useEffect(() => {
+    if (!token) {
+      markAuthReady()
+      return
+    }
+
+    let mounted = true
+    authApi
+      .me()
+      .then((user) => {
+        if (mounted) setUser(user)
+      })
+      .catch(() => {
+        if (mounted) logout()
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [token, setUser, logout, markAuthReady])
+
   return (
     <BrowserRouter>
       <Navbar />
