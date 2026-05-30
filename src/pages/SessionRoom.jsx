@@ -1,0 +1,332 @@
+// src/pages/SessionRoom.jsx
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import useAuthStore from '../store/authStore'
+import api from '../services/api'
+
+const fmt = (s) =>
+  `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+export default function SessionRoom() {
+  const { id }     = useParams()
+  const navigate   = useNavigate()
+  const { user }   = useAuthStore()
+  const jitsiRef   = useRef(null)
+  const apiRef     = useRef(null)
+  const intervalRef = useRef(null)
+
+  const [session,      setSession]      = useState(null)
+  const [phase,        setPhase]        = useState('waiting') // waiting | active | ended
+  const [seconds,      setSeconds]      = useState(0)
+  const [credits,      setCredits]      = useState(user?.credits ?? 120)
+  const [jitsiReady,   setJitsiReady]   = useState(false)
+  const [rating,       setRating]       = useState(0)
+  const [loadError,    setLoadError]    = useState('')
+
+  // ── Charger la vraie session depuis l'API ──────────────────────────────
+  useEffect(() => {
+    api.get(`/sessions/${id}`)
+      .then(res => {
+        const s = res.data.session ?? res.data
+        setSession({
+          id:            s.id,
+          title:         s.title ?? 'Session',
+          creditsPerMin: 1,
+          duration:      s.creditsReserved ?? 60,
+          myRole:        s.teacher?.id === user?.id ? 'teacher' : 'learner',
+          teacherName:   `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
+          studentName:   `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
+          jitsiRoomId:   s.jitsiRoomId,
+          status:        s.status,
+        })
+      })
+      .catch(() => {
+        setLoadError('Session introuvable ou accès refusé.')
+      })
+  }, [id, user?.id])
+
+  // ── Charger le script Jitsi une seule fois ─────────────────────────────
+  useEffect(() => {
+    if (window.JitsiMeetExternalAPI) { setJitsiReady(true); return }
+    const script = document.createElement('script')
+    script.src   = 'https://meet.jit.si/external_api.js'
+    script.async = true
+    script.onload = () => setJitsiReady(true)
+    script.onerror = () => console.error('Failed to load Jitsi script')
+    document.head.appendChild(script)
+  }, [])
+
+  // ── Timer ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === 'active') {
+      intervalRef.current = setInterval(() => {
+        setSeconds(s => s + 1)
+      }, 1000)
+    } else {
+      clearInterval(intervalRef.current)
+    }
+    return () => clearInterval(intervalRef.current)
+  }, [phase])
+
+  // ── Cleanup Jitsi au démontage ─────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+      clearInterval(intervalRef.current)
+    }
+  }, [])
+
+  const isTeacher   = session?.myRole === 'teacher'
+  const cost        = Math.ceil(seconds / 60) * (session?.creditsPerMin ?? 1)
+  const creditDelta = isTeacher ? `+${cost}` : `-${cost}`
+  const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
+
+  // ── Démarrer Jitsi (appelle /join pour activer la session) ─────────────
+  const startJitsi = async () => {
+    if (!jitsiReady || !jitsiRef.current || !session) return
+    if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+
+    // Appel /join → met la session en ACTIVE et retourne le jitsiRoomId
+    let roomName = session.jitsiRoomId ?? `skillbridge-session-${id}`
+    try {
+      const res = await api.post(`/sessions/${id}/join`)
+      if (res.data.jitsiRoomId) roomName = res.data.jitsiRoomId
+    } catch (e) {
+      // Si la session est déjà ACTIVE (l'autre a joiné), on continue avec le roomName connu
+      console.warn('join error (may already be active):', e)
+    }
+
+    const displayName = user?.firstName ?? 'User'
+
+    apiRef.current = new window.JitsiMeetExternalAPI('meet.jit.si', {
+      roomName,
+      parentNode: jitsiRef.current,
+      width:  '100%',
+      height: '100%',
+      userInfo: { displayName, email: user?.email ?? '' },
+      configOverwrite: {
+        startWithAudioMuted:  false,
+        startWithVideoMuted:  false,
+        prejoinPageEnabled:   false,
+        disableDeepLinking:   true,
+        toolbarButtons: [
+          'microphone', 'camera', 'chat', 'desktop',
+          'hangup', 'participants-pane', 'tileview', 'fullscreen',
+        ],
+      },
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK:        false,
+        SHOW_WATERMARK_FOR_GUESTS:   false,
+        DEFAULT_BACKGROUND:          '#1A1410',
+        TOOLBAR_ALWAYS_VISIBLE:      true,
+      },
+    })
+
+    apiRef.current.addEventListener('videoConferenceJoined', () => {
+      setPhase('active')
+    })
+    apiRef.current.addEventListener('videoConferenceLeft', () => {
+      handleEndSession()
+    })
+  }
+
+  // ── Terminer la session ────────────────────────────────────────────────
+  const handleEndSession = async () => {
+    if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+    clearInterval(intervalRef.current)
+    try {
+      await api.post(`/sessions/${id}/end`, { durationSeconds: seconds })
+    } catch (e) {
+      console.warn('end session error:', e)
+    }
+    setPhase('ended')
+  }
+
+  // ── Écrans d'état ──────────────────────────────────────────────────────
+  if (loadError) return (
+    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex flex-col items-center justify-center gap-4">
+      <p className="text-white/60 text-[16px]">{loadError}</p>
+      <button onClick={() => navigate('/sessions')}
+        className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+        Back to sessions
+      </button>
+    </main>
+  )
+
+  if (!session) return (
+    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+        <p className="text-white/50 text-[14px]">Loading session…</p>
+      </div>
+    </main>
+  )
+
+  return (
+    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex flex-col">
+
+      {/* ── Topbar ── */}
+      <div className="bg-[#1E2035] border-b border-white/[0.07] px-6 py-3 flex items-center gap-4 flex-shrink-0">
+
+        <button
+          onClick={() => { if (phase === 'active') handleEndSession(); else navigate('/sessions') }}
+          className="text-white/50 hover:text-white bg-transparent border-none cursor-pointer transition-all">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M11 3L6 9l5 6"/>
+          </svg>
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-bold text-[14px] truncate">{session.title}</div>
+          <div className="text-white/40 text-[11px]">
+            {isTeacher ? 'Donneur' : 'Receveur'} ·{' '}
+            {isTeacher ? session.studentName : session.teacherName}
+          </div>
+        </div>
+
+        {phase === 'active' && (
+          <div className="flex items-center gap-3 bg-white/[0.06] px-4 py-2 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-white font-black text-[18px] tabular-nums">{fmt(seconds)}</span>
+            <span className={`text-[13px] font-bold tabular-nums ${deltaColor}`}>{creditDelta} cr</span>
+          </div>
+        )}
+
+        <div className="bg-white/[0.06] px-4 py-2 rounded-full">
+          <span className="text-white/60 text-[11px]">Balance: </span>
+          <span className="text-white font-bold text-[13px]">{Math.floor(credits)} cr</span>
+        </div>
+      </div>
+
+      {/* ── Zone principale ── */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* Zone Jitsi */}
+        <div className="flex-1 relative" ref={jitsiRef}>
+
+          {/* Waiting screen */}
+          {phase === 'waiting' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+              <div className="w-20 h-20 rounded-full bg-white/[0.06] flex items-center justify-center">
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="3" y="7" width="22" height="22" rx="4"/>
+                  <path d="M25 14l8-5v18l-8-5"/>
+                </svg>
+              </div>
+
+              <div className="text-center">
+                <p className="text-white font-bold text-[20px] mb-2">{session.title}</p>
+                <p className="text-white/50 text-[14px] mb-1">
+                  {isTeacher ? `Receveur : ${session.studentName}` : `Donneur : ${session.teacherName}`}
+                </p>
+                <p className="text-white/40 text-[12px]">
+                  {session.duration} credits reserved ·{' '}
+                  {isTeacher ? 'Vous allez gagner des crédits' : 'Crédits réservés'}
+                </p>
+              </div>
+
+              <button
+                onClick={startJitsi}
+                disabled={!jitsiReady}
+                className="px-8 py-4 rounded-2xl bg-[#3D5C28] text-white text-[15px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all disabled:opacity-40 flex items-center gap-3">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <rect x="2" y="5" width="13" height="13" rx="3"/>
+                  <path d="M15 8l5-3v10l-5-3"/>
+                </svg>
+                {jitsiReady ? 'Start session' : 'Loading Jitsi…'}
+              </button>
+            </div>
+          )}
+
+          {/* Ended screen */}
+          {phase === 'ended' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+              <div className="w-16 h-16 rounded-full bg-[#3D5C28]/30 flex items-center justify-center">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#86C46E" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M5 14l6 6L23 8"/>
+                </svg>
+              </div>
+
+              <div className="text-center">
+                <p className="text-white font-black text-[24px] mb-2">Session complete!</p>
+                <p className="text-white/50 text-[15px]">
+                  Duration: {fmt(seconds)} ·{' '}
+                  <span className={deltaColor}>
+                    {isTeacher ? `+${cost} crédits gagnés` : `${cost} crédits dépensés`}
+                  </span>
+                </p>
+              </div>
+
+              {/* Rating — pour l'élève uniquement */}
+              {!isTeacher && (
+                <div className="text-center">
+                  <p className="text-white/60 text-[13px] mb-3">Rate this session</p>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setRating(s)}
+                        className={`w-11 h-11 rounded-xl text-[16px] font-bold cursor-pointer transition-all border-none
+                          ${s <= rating
+                            ? 'bg-[#252840] text-white'
+                            : 'bg-white/[0.08] text-white/40 hover:bg-white/20 hover:text-white'
+                          }`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate('/sessions')}
+                  className="px-6 py-3 rounded-xl border-[1.5px] border-white/20 text-white text-[13px] font-semibold bg-transparent cursor-pointer hover:border-white transition-all">
+                  Back to sessions
+                </button>
+                <button
+                  onClick={() => navigate('/chat')}
+                  className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+                  Continue in chat
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar active */}
+        {phase === 'active' && (
+          <div className="w-[240px] bg-[#1E2035] border-l border-white/[0.07] flex flex-col p-5 gap-4 flex-shrink-0">
+            <h3 className="text-white font-bold text-[13px]">Session info</h3>
+
+            <div className="flex flex-col gap-0">
+              {[
+                { label: 'Duration',    value: fmt(seconds)                               },
+                { label: 'Credits',     value: `${creditDelta} (${Math.floor(credits)} left)` },
+                { label: 'Rôle',        value: isTeacher ? 'Donneur' : 'Receveur'         },
+                { label: 'Reserved',    value: `${session.duration} cr`                   },
+              ].map(row => (
+                <div key={row.label}
+                  className="flex justify-between items-center py-[10px] border-b border-white/[0.06] last:border-0">
+                  <span className="text-white/40 text-[11px]">{row.label}</span>
+                  <span className="text-white text-[12px] font-semibold">{row.value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-2 h-2 rounded-full bg-[#3D5C28]" />
+              <span className="text-white/50 text-[11px]">Jitsi connected</span>
+            </div>
+
+            <button
+              onClick={handleEndSession}
+              className="mt-auto w-full py-3 rounded-xl bg-red-500 text-white text-[13px] font-bold border-none cursor-pointer hover:bg-red-600 transition-all">
+              End session
+            </button>
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
