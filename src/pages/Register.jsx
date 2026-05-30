@@ -1,8 +1,11 @@
-// src/pages/Register.jsx
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
+
+const CLOUD_NAME    = 'derho2rib'
+const UPLOAD_PRESET = 'skillbridge_avatars'
+const AVATAR_KEY    = 'sb_avatar'
 
 const ALL_SKILLS = [
   'Mathematics','English','French','Spanish','Japanese','Chinese','Arabic',
@@ -11,19 +14,22 @@ const ALL_SKILLS = [
   'Chess','Writing','Philosophy','Physics','Chemistry',
 ]
 
-const STEPS = ['Account', 'Profile', 'Skills', 'Done']
+const STEPS = ['Compte', 'Profil', 'Compétences', 'Terminé']
 
 export default function Register() {
   const navigate = useNavigate()
   const { login } = useAuthStore()
+  const fileRef   = useRef()
 
-  const [step, setStep]               = useState(0)
-  const [loading, setLoading]         = useState(false)
-  const [error, setError]             = useState('')
+  const [step,     setStep]    = useState(0)
+  const [loading,  setLoading] = useState(false)
+  const [error,    setError]   = useState('')
+  const [avatar,   setAvatar]  = useState('')
+  const [uploading,setUploading] = useState(false)
+
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '',
-    bio: '', age: '', city: '',
-    teaches: [], wants: [],
+    bio: '', teaches: [], wants: [],
   })
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -33,25 +39,37 @@ export default function Register() {
     set(type, arr.includes(skill) ? arr.filter(s => s !== skill) : [...arr, skill])
   }
 
-  // Étape 0 → 1 : valider les champs account puis continuer
-  const handleStep0 = () => {
-    if (!form.firstName.trim()) { setError('First name is required'); return }
-    if (!form.lastName.trim())  { setError('Last name is required'); return }
-    if (!form.email.trim())     { setError('Email is required'); return }
-    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
-    setError('')
-    setStep(1)
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('upload_preset', UPLOAD_PRESET)
+      const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.secure_url) {
+        localStorage.setItem(AVATAR_KEY, data.secure_url)
+        setAvatar(data.secure_url)
+      }
+    } catch (e) { console.error(e) }
+    finally { setUploading(false) }
   }
 
-  // Étape 2 : créer le compte + ajouter les skills
-  const handleCreateAccount = async () => {
-    if (form.teaches.length === 0) { setError('Select at least one skill you can teach'); return }
-    if (form.wants.length === 0)   { setError('Select at least one skill you want to learn'); return }
-    setError('')
-    setLoading(true)
+  const handleStep0 = () => {
+    if (!form.firstName.trim()) { setError('Le prénom est requis'); return }
+    if (!form.lastName.trim())  { setError('Le nom est requis'); return }
+    if (!form.email.trim())     { setError("L'email est requis"); return }
+    if (form.password.length < 8) { setError('Mot de passe : 8 caractères minimum'); return }
+    setError(''); setStep(1)
+  }
 
+  const handleCreateAccount = async () => {
+    if (form.teaches.length === 0) { setError('Sélectionnez au moins une compétence à enseigner'); return }
+    if (form.wants.length === 0)   { setError('Sélectionnez au moins une compétence à apprendre'); return }
+    setError(''); setLoading(true)
     try {
-      // 1. Créer le compte
       const res = await api.post('/auth/register', {
         firstName: form.firstName.trim(),
         lastName:  form.lastName.trim(),
@@ -59,51 +77,26 @@ export default function Register() {
         password:  form.password,
         bio:       form.bio.trim() || undefined,
       })
-
       const { user, token } = res.data
-
-      // 2. Connecter l'utilisateur immédiatement pour avoir le token
       login(user, token)
 
-      // 3. Ajouter les skills via l'API (token maintenant disponible)
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      const base    = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
-      const skillPromises = [
-        ...form.teaches.map(skill =>
-          fetch(`${base}/users/skills`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ name: skill, category: 'General' }),
-          }).catch(() => {})
-        ),
-        ...form.wants.map(skill =>
-          fetch(`${base}/users/learning-goals`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ name: skill, category: 'General' }),
-          }).catch(() => {})
-        ),
-      ]
-
-      await Promise.allSettled(skillPromises)
-
-      // 4. Passer à l'écran de confirmation
+      await Promise.allSettled([
+        ...form.teaches.map(skill => fetch(`${base}/users/skills`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
+        ...form.wants.map(skill   => fetch(`${base}/users/learning-goals`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
+      ])
       setStep(3)
-
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Registration failed'
-      setError(msg)
-    } finally {
-      setLoading(false)
-    }
+      setError(err.response?.data?.message || err.message || "Échec de l'inscription")
+    } finally { setLoading(false) }
   }
 
   const inp = "w-full px-4 py-[11px] rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F8F8] text-[14px] text-[#1A1410] outline-none focus:border-[#252840] transition-all placeholder:text-[#B0A898]"
   const lbl = "text-[11px] font-bold uppercase tracking-[0.6px] text-[#7A6E5C] block mb-1"
+
+  const initials = `${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`.toUpperCase() || '?'
 
   return (
     <main className="min-h-screen bg-white flex items-center justify-center py-16 px-4">
@@ -115,7 +108,7 @@ export default function Register() {
             <span className="text-[#252840]">Skill</span>
             <span className="text-[#C8864B]">Bridge</span>
           </span>
-          <p className="text-[14px] text-[#7A6E5C] mt-1">Create your account — it's free</p>
+          <p className="text-[14px] text-[#7A6E5C] mt-1">Créez votre compte — c'est gratuit</p>
         </div>
 
         {/* Progress */}
@@ -124,7 +117,10 @@ export default function Register() {
             <div key={s} className="flex items-center gap-2 flex-1">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold flex-shrink-0 transition-all
                 ${i < step ? 'bg-[#3D5C28] text-white' : i === step ? 'bg-[#252840] text-white' : 'bg-[#E8E4DC] text-[#7A6E5C]'}`}>
-                {i < step ? '✓' : i + 1}
+                {i < step
+                  ? <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
+                  : i + 1
+                }
               </div>
               <span className={`text-[12px] font-medium hidden sm:block ${i === step ? 'text-[#1A1410]' : 'text-[#7A6E5C]'}`}>{s}</span>
               {i < STEPS.length - 1 && (
@@ -134,7 +130,6 @@ export default function Register() {
           ))}
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl border border-black/[0.09] p-8">
 
           {error && (
@@ -143,20 +138,20 @@ export default function Register() {
             </div>
           )}
 
-          {/* STEP 0 — Account */}
+          {/* STEP 0 — Compte */}
           {step === 0 && (
             <div className="flex flex-col gap-4">
               <div>
-                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Create your account</h2>
-                <p className="text-[13px] text-[#7A6E5C] mt-1">You'll use this to log in.</p>
+                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Créer votre compte</h2>
+                <p className="text-[13px] text-[#7A6E5C] mt-1">Vous utiliserez ces informations pour vous connecter.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={lbl}>First name</label>
+                  <label className={lbl}>Prénom</label>
                   <input className={inp} placeholder="Alice" value={form.firstName} onChange={e => set('firstName', e.target.value)} />
                 </div>
                 <div>
-                  <label className={lbl}>Last name</label>
+                  <label className={lbl}>Nom</label>
                   <input className={inp} placeholder="Martin" value={form.lastName} onChange={e => set('lastName', e.target.value)} />
                 </div>
               </div>
@@ -165,80 +160,91 @@ export default function Register() {
                 <input className={inp} type="email" placeholder="alice@example.com" value={form.email} onChange={e => set('email', e.target.value)} />
               </div>
               <div>
-                <label className={lbl}>Password (min. 8 characters)</label>
+                <label className={lbl}>Mot de passe (8 caractères min.)</label>
                 <input className={inp} type="password" placeholder="••••••••" value={form.password} onChange={e => set('password', e.target.value)} />
               </div>
               <button onClick={handleStep0}
                 className="w-full py-3 rounded-xl border-none bg-[#252840] text-white text-[14px] font-bold cursor-pointer hover:bg-[#363B6B] transition-all">
-                Continue
+                Continuer
               </button>
               <p className="text-center text-[12px] text-[#7A6E5C]">
-                Already have an account?{' '}
+                Déjà un compte ?{' '}
                 <button onClick={() => navigate('/')} className="text-[#252840] font-bold bg-transparent border-none cursor-pointer">
-                  Log in
+                  Se connecter
                 </button>
               </p>
             </div>
           )}
 
-          {/* STEP 1 — Profile */}
+          {/* STEP 1 — Profil + Photo */}
           {step === 1 && (
             <div className="flex flex-col gap-4">
               <div>
-                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Your profile</h2>
-                <p className="text-[13px] text-[#7A6E5C] mt-1">This is what others see when they find you.</p>
+                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Votre profil</h2>
+                <p className="text-[13px] text-[#7A6E5C] mt-1">C'est ce que les autres voient quand ils vous trouvent.</p>
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-[#252840] flex items-center justify-center flex-shrink-0">
-                  <span className="text-[28px] text-white font-black">{form.firstName?.[0]?.toUpperCase() ?? '?'}</span>
+              {/* Photo de profil */}
+              <div className="flex items-center gap-4 p-4 bg-[#F8F4EA] rounded-xl">
+                <div className="relative flex-shrink-0">
+                  <div className="w-20 h-20 rounded-full bg-[#252840] flex items-center justify-center overflow-hidden">
+                    {avatar
+                      ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                      : <span className="text-[28px] text-white font-black">{initials}</span>
+                    }
+                  </div>
+                  {uploading && (
+                    <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={lbl}>Age (optional)</label>
-                  <input className={inp} type="number" placeholder="21" min="13" max="99" value={form.age} onChange={e => set('age', e.target.value)} />
-                </div>
-                <div>
-                  <label className={lbl}>City (optional)</label>
-                  <input className={inp} placeholder="Paris" value={form.city} onChange={e => set('city', e.target.value)} />
+                <div className="flex-1">
+                  <p className="text-[13px] font-semibold text-[#1A1410] mb-1">Photo de profil</p>
+                  <p className="text-[11px] text-[#7A6E5C] mb-2">JPG ou PNG — optionnel</p>
+                  <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                    className="px-4 py-[7px] rounded-lg border-[1.5px] border-black/[0.09] text-[12px] font-semibold text-[#1A1410] bg-white cursor-pointer hover:border-[#252840] transition-all flex items-center gap-2">
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M11.5 9.5a2 2 0 01-2 2h-6a2 2 0 01-2-2V4a2 2 0 012-2h1.5l1-1.5h3L10 2h1.5a2 2 0 012 2z"/>
+                      <circle cx="6.5" cy="6.5" r="2"/>
+                    </svg>
+                    {uploading ? 'Upload en cours…' : avatar ? 'Changer la photo' : 'Ajouter une photo'}
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
                 </div>
               </div>
 
               <div>
-                <label className={lbl}>Bio (optional)</label>
+                <label className={lbl}>Bio (optionnel)</label>
                 <textarea className={`${inp} resize-none h-24`}
-                  placeholder="I love maths and want to learn guitar. I can help with Python too!"
+                  placeholder="Je suis passionné de maths et je veux apprendre la guitare…"
                   value={form.bio} onChange={e => set('bio', e.target.value)} />
               </div>
 
               <div className="flex gap-3">
                 <button onClick={() => { setError(''); setStep(0) }}
                   className="px-5 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[13px] font-semibold text-[#7A6E5C] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all">
-                  Back
+                  Retour
                 </button>
                 <button onClick={() => { setError(''); setStep(2) }}
                   className="flex-1 py-3 rounded-xl border-none bg-[#252840] text-white text-[14px] font-bold cursor-pointer hover:bg-[#363B6B] transition-all">
-                  Continue
+                  Continuer
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 2 — Skills */}
+          {/* STEP 2 — Compétences */}
           {step === 2 && (
             <div className="flex flex-col gap-5">
               <div>
-                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Your skills</h2>
-                <p className="text-[13px] text-[#7A6E5C] mt-1">
-                  This drives your connections. The system finds people whose skills match yours.
-                </p>
+                <h2 className="text-[22px] font-black tracking-tight text-[#1A1410]">Vos compétences</h2>
+                <p className="text-[13px] text-[#7A6E5C] mt-1">Choisissez ce que vous pouvez enseigner et ce que vous voulez apprendre.</p>
               </div>
 
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#C8864B] block mb-3">
-                  I can teach — {form.teaches.length} selected
+                  Je peux enseigner — {form.teaches.length} sélectionné{form.teaches.length > 1 ? 's' : ''}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {ALL_SKILLS.map(skill => (
@@ -255,7 +261,7 @@ export default function Register() {
 
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#3D5C28] block mb-3">
-                  I want to learn — {form.wants.length} selected
+                  Je veux apprendre — {form.wants.length} sélectionné{form.wants.length > 1 ? 's' : ''}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {ALL_SKILLS.map(skill => (
@@ -271,25 +277,23 @@ export default function Register() {
               </div>
 
               <div className="bg-[#ECEEF8] rounded-xl px-5 py-4">
-                <p className="text-[13px] font-bold text-[#252840] mb-1">How credits work</p>
+                <p className="text-[13px] font-bold text-[#252840] mb-1">Comment fonctionnent les crédits</p>
                 <p className="text-[12px] text-[#7A6E5C] leading-[1.6]">
-                  You start with <strong>120 free credits</strong> (= 2 hours).
-                  Each minute you teach earns +1 credit.
-                  Each minute you learn costs −1 credit.
-                  Group sessions are always free.
+                  Vous démarrez avec <strong>120 crédits gratuits</strong> (= 2 heures).
+                  Chaque minute enseignée rapporte +1 crédit.
+                  Chaque minute apprise coûte −1 crédit.
                 </p>
               </div>
 
               <div className="flex gap-3">
                 <button onClick={() => { setError(''); setStep(1) }}
                   className="px-5 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[13px] font-semibold text-[#7A6E5C] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all">
-                  Back
+                  Retour
                 </button>
-                <button
-                  onClick={handleCreateAccount}
+                <button onClick={handleCreateAccount}
                   disabled={loading || form.teaches.length === 0 || form.wants.length === 0}
                   className="flex-1 py-3 rounded-xl border-none bg-[#252840] text-white text-[14px] font-bold cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                  {loading ? 'Creating account…' : 'Create my account'}
+                  {loading ? 'Création du compte…' : 'Créer mon compte'}
                 </button>
               </div>
             </div>
@@ -298,24 +302,24 @@ export default function Register() {
           {/* STEP 3 — Done */}
           {step === 3 && (
             <div className="flex flex-col items-center gap-5 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-[#E4EED8] flex items-center justify-center">
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="#3D5C28" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M6 16l7 7L26 9"/>
-                </svg>
+              <div className="w-20 h-20 rounded-full bg-[#252840] flex items-center justify-center overflow-hidden">
+                {avatar
+                  ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                  : <span className="text-[28px] text-white font-black">{initials}</span>
+                }
               </div>
               <div>
-                <h2 className="text-[24px] font-black tracking-tight text-[#1A1410]">Welcome, {form.firstName}!</h2>
+                <h2 className="text-[24px] font-black tracking-tight text-[#1A1410]">Bienvenue, {form.firstName} !</h2>
                 <p className="text-[14px] text-[#7A6E5C] mt-2 max-w-[340px] leading-[1.6]">
-                  Your account is ready. You have <strong>120 credits</strong> to start — that's 2 hours of learning.
+                  Votre compte est prêt. Vous avez <strong>120 crédits</strong> pour commencer.
                 </p>
               </div>
               <div className="bg-[#E4EED8] rounded-xl px-6 py-3 text-[13px] font-semibold text-[#3D5C28]">
-                120 credits — 2 hours of learning available
+                120 crédits — 2 heures d'apprentissage disponibles
               </div>
-              <button
-                onClick={() => navigate('/connection')}
+              <button onClick={() => navigate('/connection')}
                 className="w-full py-3 rounded-xl border-none bg-[#3D5C28] text-white text-[14px] font-bold cursor-pointer hover:bg-[#4E6035] transition-all">
-                Find my first connection →
+                Trouver ma première connexion
               </button>
             </div>
           )}
