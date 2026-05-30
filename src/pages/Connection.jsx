@@ -3,29 +3,55 @@ import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import { CATEGORIES, SKILL_TO_CATEGORY } from '../data/categories'
 
-const COLORS = ['#252840', '#C8864B', '#3D5C28', '#363B6B']
+const COLORS   = ['#252840', '#C8864B', '#3D5C28', '#363B6B']
+const DAYS     = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']
+const SLOTS    = ['Matin', 'Midi', 'Soir']
+const SLOT_HINTS = { Matin: '8h–12h', Midi: '12h–14h', Soir: '18h–22h' }
+const AVAIL_KEY  = 'sb_availability_'
+const AVATAR_KEY = 'sb_avatar_'
 
 function colorFor(id) {
   if (!id) return COLORS[0]
   return COLORS[Math.abs(id.charCodeAt(0) % COLORS.length)]
 }
 
-// Calcule un score de pertinence entre un membre et l'utilisateur connecté
+// Récupère l'avatar stocké localement pour un userId donné
+// (chaque utilisateur stocke son propre avatar sous sb_avatar_<userId>)
+// Pour l'instant on stocke sous sb_avatar (sans id) mais on lit les deux
+function getAvatarFor(userId) {
+  return localStorage.getItem(`${AVATAR_KEY}${userId}`) || ''
+}
+
+// Récupère les disponibilités stockées localement pour un userId
+function getAvailFor(userId) {
+  try {
+    return JSON.parse(localStorage.getItem(`${AVAIL_KEY}${userId}`) || '{}')
+  } catch { return {} }
+}
+
 function matchScore(member, myGoals, mySkills) {
   let score = 0
-  // Ce que le membre enseigne couvre mes objectifs → très pertinent
   myGoals.forEach(goal => {
-    if (member.teaches.some(s => s.toLowerCase().includes(goal.toLowerCase()) || goal.toLowerCase().includes(s.toLowerCase()))) {
-      score += 10
-    }
+    if (member.teaches.some(s => s.toLowerCase().includes(goal.toLowerCase()) || goal.toLowerCase().includes(s.toLowerCase()))) score += 10
   })
-  // Ce que le membre veut apprendre correspond à ce que je peux enseigner
   mySkills.forEach(skill => {
-    if (member.wants.some(s => s.toLowerCase().includes(skill.toLowerCase()) || skill.toLowerCase().includes(s.toLowerCase()))) {
-      score += 5
-    }
+    if (member.wants.some(s => s.toLowerCase().includes(skill.toLowerCase()) || skill.toLowerCase().includes(s.toLowerCase()))) score += 5
   })
   return score
+}
+
+function Avatar({ userId, firstName, lastName, color, size = 'md' }) {
+  const avatar = getAvatarFor(userId)
+  const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase()
+  const sz = size === 'lg' ? 'w-16 h-16 text-xl' : size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'
+  return (
+    <div className={`${sz} rounded-full flex items-center justify-center font-black text-white flex-shrink-0 overflow-hidden`} style={{ background: color }}>
+      {avatar
+        ? <img src={avatar} alt={firstName} className="w-full h-full object-cover" />
+        : initials
+      }
+    </div>
+  )
 }
 
 export default function Connection() {
@@ -41,6 +67,15 @@ export default function Connection() {
   const [allUsers,  setAllUsers]  = useState([])
   const [myProfile, setMyProfile] = useState(null)
 
+  // Sauvegarde l'avatar de l'utilisateur connecté sous la clé avec son id
+  useEffect(() => {
+    if (!user?.id) return
+    const global = localStorage.getItem('sb_avatar')
+    if (global) {
+      localStorage.setItem(`${AVATAR_KEY}${user.id}`, global)
+    }
+  }, [user])
+
   const loadData = useCallback(async () => {
     if (!user) return
     try {
@@ -49,17 +84,12 @@ export default function Connection() {
         api.get('/matches/mine'),
         api.get('/users/me'),
       ])
-
-      const suggestions = sugRes.data.suggestions || []
-      setAllUsers(suggestions)
+      setAllUsers(sugRes.data.suggestions || [])
       setMyProfile(profRes.data.user)
-
       const matches = matchRes.data.matches || []
       setIncoming(matches.filter(m => m.receiverId === user.id && m.status === 'PENDING'))
       setRequested(new Set(matches.filter(m => m.requesterId === user.id).map(m => m.receiverId)))
-    } catch (e) {
-      console.error(e)
-    }
+    } catch (e) { console.error(e) }
   }, [user])
 
   useEffect(() => {
@@ -68,7 +98,6 @@ export default function Connection() {
     return () => clearInterval(id)
   }, [loadData])
 
-  // Transformer les utilisateurs API en membres affichables
   const myGoals  = (myProfile?.learningGoals  || []).map(g => g.skill?.name ?? g)
   const mySkills = (myProfile?.teachingSkills  || []).map(s => s.skill?.name ?? s)
 
@@ -80,16 +109,13 @@ export default function Connection() {
     credits:   u.credits,
     teaches:   (u.teachingSkills || []).map(s => s.skill?.name ?? s),
     wants:     (u.learningGoals  || []).map(s => s.skill?.name ?? s),
-    category:  SKILL_TO_CATEGORY[(u.teachingSkills?.[0]?.skill?.name)] ?? 'all',
     color:     colorFor(u.id),
     score:     matchScore(
       { teaches: (u.teachingSkills || []).map(s => s.skill?.name ?? s), wants: (u.learningGoals || []).map(s => s.skill?.name ?? s) },
-      myGoals,
-      mySkills
+      myGoals, mySkills
     ),
   }))
 
-  // Filtrage
   const filtered = members
     .filter(m => {
       if (category !== 'all') {
@@ -98,15 +124,12 @@ export default function Connection() {
       }
       if (search.trim()) {
         const q = search.toLowerCase()
-        return (
-          `${m.firstName} ${m.lastName}`.toLowerCase().includes(q) ||
+        return `${m.firstName} ${m.lastName}`.toLowerCase().includes(q) ||
           m.teaches.some(s => s.toLowerCase().includes(q)) ||
           m.wants.some(s => s.toLowerCase().includes(q))
-        )
       }
       return true
     })
-    // Tri : score de matching décroissant, puis alphabétique
     .sort((a, b) => b.score - a.score || a.firstName.localeCompare(b.firstName))
 
   const handleConnect = async (memberId) => {
@@ -114,6 +137,7 @@ export default function Connection() {
     try {
       await api.post('/matches/request', { receiverId: memberId })
       setRequested(prev => new Set([...prev, memberId]))
+      setSelected(null)
     } catch (e) {
       alert(e.response?.data?.message || 'Erreur lors de la demande')
     }
@@ -134,61 +158,134 @@ export default function Connection() {
     } catch (e) { alert(e.response?.data?.message || 'Erreur') }
   }
 
+  // Disponibilités du membre sélectionné
+  const memberAvail = selectedMember ? getAvailFor(selectedMember.id) : {}
+  const hasAvail    = Object.values(memberAvail).some(Boolean)
+
   return (
     <main className="pt-[62px] min-h-screen bg-white">
 
-      {/* Modal profil */}
+      {/* Fiche profil complète */}
       {selectedMember && (
         <div className="fixed inset-0 z-[400] bg-black/50 flex items-center justify-center p-4"
           onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl p-8 w-[460px] max-w-full relative shadow-2xl"
+          <div className="bg-white rounded-2xl w-[500px] max-w-full max-h-[90vh] overflow-y-auto shadow-2xl"
             onClick={e => e.stopPropagation()}>
-            <button onClick={() => setSelected(null)}
-              className="absolute top-4 right-4 text-[#7A6E5C] hover:text-[#1A1410] bg-transparent border-none cursor-pointer text-xl leading-none">✕</button>
 
-            <div className="flex items-center gap-4 mb-5">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-black flex-shrink-0"
-                style={{ background: selectedMember.color }}>
-                {selectedMember.firstName?.[0]}{selectedMember.lastName?.[0]}
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-[#1A1410]">{selectedMember.firstName} {selectedMember.lastName}</h2>
-                {selectedMember.bio && <p className="text-[13px] text-[#7A6E5C] mt-1">{selectedMember.bio}</p>}
-                {selectedMember.score > 0 && (
-                  <span className="inline-block mt-1 px-2 py-[2px] rounded-full bg-[#E4EED8] text-[#3D5C28] text-[11px] font-bold">
-                    ✓ Correspond à vos objectifs
-                  </span>
-                )}
+            {/* Header */}
+            <div className="relative p-6 pb-4 border-b border-black/[0.06]">
+              <button onClick={() => setSelected(null)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/5 flex items-center justify-center text-[#7A6E5C] hover:bg-black/10 transition-all bg-transparent border-none cursor-pointer text-lg leading-none">
+                ✕
+              </button>
+              <div className="flex items-center gap-4">
+                <Avatar userId={selectedMember.id} firstName={selectedMember.firstName} lastName={selectedMember.lastName} color={selectedMember.color} size="lg" />
+                <div>
+                  <h2 className="text-[20px] font-black text-[#1A1410]">{selectedMember.firstName} {selectedMember.lastName}</h2>
+                  {selectedMember.bio && <p className="text-[13px] text-[#7A6E5C] mt-1">{selectedMember.bio}</p>}
+                  {selectedMember.score > 0 && (
+                    <span className="inline-flex items-center gap-1 mt-1 px-2 py-[2px] rounded-full bg-[#E4EED8] text-[#3D5C28] text-[11px] font-bold">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 5l2 2 4-4"/></svg>
+                      Correspond à vos objectifs
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {selectedMember.teaches.length > 0 && (
-              <div className="mb-4">
-                <p className="text-[10px] font-bold text-[#C8864B] uppercase tracking-wide mb-2">Peut enseigner</p>
-                <div className="flex flex-wrap gap-1">
-                  {selectedMember.teaches.map(s => (
-                    <span key={s} className="px-3 py-1 rounded-full bg-[#252840] text-white text-[12px]">{s}</span>
-                  ))}
+            {/* Compétences */}
+            <div className="px-6 py-4 border-b border-black/[0.06]">
+              {selectedMember.teaches.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-[#C8864B] uppercase tracking-wide mb-2">Peut enseigner</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedMember.teaches.map(s => (
+                      <span key={s} className="px-3 py-1 rounded-full bg-[#252840] text-white text-[11px] font-semibold">{s}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {selectedMember.wants.length > 0 && (
-              <div className="mb-5">
-                <p className="text-[10px] font-bold text-[#3D5C28] uppercase tracking-wide mb-2">Veut apprendre</p>
-                <div className="flex flex-wrap gap-1">
-                  {selectedMember.wants.map(s => (
-                    <span key={s} className="px-3 py-1 rounded-full border border-[#3D5C28] text-[#3D5C28] text-[12px]">{s}</span>
-                  ))}
+              )}
+              {selectedMember.wants.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-[#3D5C28] uppercase tracking-wide mb-2">Veut apprendre</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedMember.wants.map(s => (
+                      <span key={s} className="px-3 py-1 rounded-full border border-[#3D5C28] text-[#3D5C28] text-[11px] font-semibold">{s}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            <button
-              onClick={() => { handleConnect(selectedMember.id); setSelected(null) }}
-              disabled={requested.has(selectedMember.id)}
-              className="w-full py-3 rounded-xl bg-[#252840] text-white font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50 disabled:cursor-default text-[14px]">
-              {requested.has(selectedMember.id) ? 'Demande envoyée ✓' : 'Se connecter'}
-            </button>
+            {/* Disponibilités */}
+            <div className="px-6 py-4 border-b border-black/[0.06]">
+              <p className="text-[12px] font-bold text-[#1A1410] mb-3">Créneaux disponibles</p>
+              {!hasAvail ? (
+                <div className="bg-[#FAF5E8] rounded-xl p-4 text-center">
+                  <p className="text-[13px] text-[#7A6E5C]">
+                    {selectedMember.firstName} n'a pas encore renseigné ses disponibilités.
+                  </p>
+                  <p className="text-[12px] text-[#7A6E5C] mt-1">
+                    Envoyez une demande et discutez de l'heure dans le chat.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl overflow-hidden border border-black/[0.09]">
+                  {/* Header jours */}
+                  <div className="grid bg-[#F8F4EA]" style={{ gridTemplateColumns: '72px repeat(5, 1fr)' }}>
+                    <div className="p-2" />
+                    {DAYS.map(day => (
+                      <div key={day} className="p-2 text-center text-[10px] font-bold text-[#252840] border-l border-black/[0.06]">
+                        {day.slice(0, 3)}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Créneaux */}
+                  {SLOTS.map((slot, si) => (
+                    <div key={slot} className={`grid ${si < SLOTS.length - 1 ? 'border-b border-black/[0.09]' : ''}`}
+                      style={{ gridTemplateColumns: '72px repeat(5, 1fr)' }}>
+                      <div className="p-2 flex flex-col justify-center border-r border-black/[0.06]">
+                        <p className="text-[10px] font-bold text-[#1A1410]">{slot}</p>
+                        <p className="text-[9px] text-[#7A6E5C]">{SLOT_HINTS[slot]}</p>
+                      </div>
+                      {DAYS.map(day => {
+                        const active = !!memberAvail[`${day}_${slot}`]
+                        return (
+                          <div key={day} className={`border-l border-black/[0.06] p-2 flex items-center justify-center ${active ? 'bg-[#E4EED8]' : 'bg-white'}`}>
+                            {active
+                              ? <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#3D5C28" strokeWidth="2.5" strokeLinecap="round"><path d="M2 7l3 3 7-6"/></svg>
+                              : <div className="w-3 h-3 rounded bg-black/[0.05]" />
+                            }
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Bouton réservation */}
+            <div className="p-6">
+              {requested.has(selectedMember.id) ? (
+                <div className="w-full py-3 rounded-xl bg-[#E4EED8] text-[#3D5C28] text-[14px] font-bold text-center">
+                  Demande envoyée — attendez la réponse dans le chat
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleConnect(selectedMember.id)}
+                  disabled={!user}
+                  className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50">
+                  {!user ? 'Connectez-vous pour réserver' : hasAvail ? 'Envoyer une demande de réservation' : 'Envoyer une demande'}
+                </button>
+              )}
+              {!user && (
+                <button onClick={() => { openModal('login'); setSelected(null) }}
+                  className="w-full mt-2 py-2 rounded-xl border-[1.5px] border-[#252840] text-[#252840] text-[13px] font-semibold bg-transparent cursor-pointer hover:bg-[#ECEEF8] transition-all">
+                  Se connecter
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -200,7 +297,7 @@ export default function Connection() {
             <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Trouver un pair</p>
             <h1 className="text-[34px] font-black tracking-[-1.2px] text-[#1A1410]">Connexions</h1>
             <p className="text-[13px] text-[#7A6E5C] mt-1">
-              {user ? 'Les profils qui correspondent à vos objectifs apparaissent en premier' : 'Connectez-vous pour voir les membres et leurs disponibilités'}
+              {user ? 'Les profils compatibles avec vos objectifs apparaissent en premier' : 'Connectez-vous pour voir les membres'}
             </p>
           </div>
           {incoming.length > 0 && (
@@ -210,13 +307,8 @@ export default function Connection() {
             </button>
           )}
         </div>
-
-        {/* Tabs */}
         <div className="flex gap-1 mt-6 border-b border-black/[0.07]">
-          {[
-            { key: 'discover', label: 'Découvrir' },
-            { key: 'requests', label: `Demandes (${incoming.length})` },
-          ].map(t => (
+          {[{ key: 'discover', label: 'Découvrir' }, { key: 'requests', label: `Demandes (${incoming.length})` }].map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`px-5 py-3 text-[13px] font-semibold border-none bg-transparent cursor-pointer border-b-2 -mb-px transition-all
                 ${tab === t.key ? 'text-[#252840] border-[#252840]' : 'text-[#7A6E5C] border-transparent hover:text-[#1A1410]'}`}>
@@ -232,15 +324,13 @@ export default function Connection() {
           {incoming.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl border border-black/[0.09]">
               <p className="text-[16px] font-semibold text-[#1A1410] mb-1">Aucune demande en attente</p>
-              <p className="text-[13px] text-[#7A6E5C]">Quand un membre veut se connecter avec vous, la demande apparaît ici.</p>
+              <p className="text-[13px] text-[#7A6E5C]">Les demandes apparaissent ici quand un membre veut se connecter.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {incoming.map(m => (
-                <div key={m.id} className="bg-white border border-black/[0.09] rounded-2xl p-5 flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-full bg-[#252840] flex items-center justify-center font-bold text-white text-[16px] flex-shrink-0">
-                    {m.requester?.firstName?.[0]}{m.requester?.lastName?.[0]}
-                  </div>
+                <div key={m.id} className="bg-white border border-black/[0.09] rounded-2xl p-5 flex items-center gap-4">
+                  <Avatar userId={m.requesterId} firstName={m.requester?.firstName} lastName={m.requester?.lastName} color={colorFor(m.requesterId)} size="md" />
                   <div className="flex-1">
                     <p className="text-[15px] font-bold text-[#1A1410]">{m.requester?.firstName} {m.requester?.lastName}</p>
                     <p className="text-[12px] text-[#7A6E5C]">souhaite se connecter avec vous</p>
@@ -284,11 +374,11 @@ export default function Connection() {
               </svg>
               <input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Rechercher par nom ou compétence…"
-                className="w-full pl-9 pr-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-white text-[13px] outline-none focus:border-[#252840] transition-all"/>
+                className="w-full pl-9 pr-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-white text-[13px] outline-none focus:border-[#252840] transition-all" />
             </div>
           </div>
 
-          {/* Connexion requise */}
+          {/* Non connecté */}
           {!user ? (
             <div className="text-center py-20">
               <div className="w-16 h-16 rounded-2xl bg-[#ECEEF8] flex items-center justify-center mx-auto mb-4">
@@ -297,16 +387,15 @@ export default function Connection() {
                 </svg>
               </div>
               <p className="text-[16px] font-semibold text-[#1A1410] mb-2">Connectez-vous pour voir les membres</p>
-              <p className="text-[13px] text-[#7A6E5C] mb-5">Découvrez les profils et leurs disponibilités.</p>
               <button onClick={() => openModal('login')}
-                className="px-6 py-3 rounded-xl bg-[#252840] text-white font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+                className="mt-2 px-6 py-3 rounded-xl bg-[#252840] text-white font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
                 Se connecter
               </button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-[16px] font-semibold text-[#1A1410] mb-2">Aucun membre trouvé</p>
-              <p className="text-[13px] text-[#7A6E5C]">Essayez une autre catégorie ou invitez des amis à s'inscrire.</p>
+              <p className="text-[13px] text-[#7A6E5C]">Essayez une autre catégorie ou invitez des amis.</p>
             </div>
           ) : (
             <>
@@ -319,20 +408,14 @@ export default function Connection() {
                   <div key={m.id} onClick={() => setSelected(m)}
                     className="bg-white border border-black/[0.09] rounded-2xl p-5 cursor-pointer hover:shadow-md hover:border-[#252840]/20 transition-all relative">
 
-                    {/* Badge matching */}
                     {m.score > 0 && (
                       <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-[#E4EED8] flex items-center justify-center">
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#3D5C28" strokeWidth="1.8" strokeLinecap="round">
-                          <path d="M2 5l2 2 4-4"/>
-                        </svg>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#3D5C28" strokeWidth="2" strokeLinecap="round"><path d="M2 5l2 2 4-4"/></svg>
                       </div>
                     )}
 
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-[14px] flex-shrink-0"
-                        style={{ background: m.color }}>
-                        {m.firstName?.[0]}{m.lastName?.[0]}
-                      </div>
+                      <Avatar userId={m.id} firstName={m.firstName} lastName={m.lastName} color={m.color} size="md" />
                       <div className="min-w-0">
                         <p className="text-[14px] font-bold text-[#1A1410] truncate">{m.firstName} {m.lastName}</p>
                         {m.bio && <p className="text-[11px] text-[#7A6E5C] truncate">{m.bio}</p>}
@@ -343,9 +426,7 @@ export default function Connection() {
                       <div className="mb-2">
                         <p className="text-[10px] font-bold text-[#C8864B] uppercase tracking-wide mb-1">Enseigne</p>
                         <div className="flex flex-wrap gap-1">
-                          {m.teaches.slice(0, 3).map(s => (
-                            <span key={s} className="px-2 py-[2px] rounded-full bg-[#252840] text-white text-[10px]">{s}</span>
-                          ))}
+                          {m.teaches.slice(0, 3).map(s => <span key={s} className="px-2 py-[2px] rounded-full bg-[#252840] text-white text-[10px]">{s}</span>)}
                           {m.teaches.length > 3 && <span className="text-[10px] text-[#7A6E5C]">+{m.teaches.length - 3}</span>}
                         </div>
                       </div>
@@ -355,20 +436,18 @@ export default function Connection() {
                       <div className="mb-4">
                         <p className="text-[10px] font-bold text-[#3D5C28] uppercase tracking-wide mb-1">Apprend</p>
                         <div className="flex flex-wrap gap-1">
-                          {m.wants.slice(0, 3).map(s => (
-                            <span key={s} className="px-2 py-[2px] rounded-full border border-[#3D5C28] text-[#3D5C28] text-[10px]">{s}</span>
-                          ))}
+                          {m.wants.slice(0, 3).map(s => <span key={s} className="px-2 py-[2px] rounded-full border border-[#3D5C28] text-[#3D5C28] text-[10px]">{s}</span>)}
                           {m.wants.length > 3 && <span className="text-[10px] text-[#7A6E5C]">+{m.wants.length - 3}</span>}
                         </div>
                       </div>
                     )}
 
-                    <button
-                      onClick={e => { e.stopPropagation(); handleConnect(m.id) }}
-                      disabled={requested.has(m.id)}
-                      className="w-full py-2 rounded-lg bg-[#252840] text-white text-[12px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50 disabled:cursor-default">
-                      {requested.has(m.id) ? 'Demande envoyée ✓' : 'Se connecter'}
-                    </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-[#7A6E5C]">Voir le profil →</span>
+                      {requested.has(m.id) && (
+                        <span className="text-[10px] font-bold text-[#3D5C28] bg-[#E4EED8] px-2 py-[2px] rounded-full">Demande envoyée</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

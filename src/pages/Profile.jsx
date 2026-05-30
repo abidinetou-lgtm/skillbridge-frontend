@@ -17,8 +17,8 @@ const SLOT_HINTS = { Matin: '8h–12h', Midi: '12h–14h', Soir: '18h–22h' }
 const AVAIL_KEY  = 'sb_availability'
 const AVATAR_KEY = 'sb_avatar'
 
-function loadAvailability() {
-  try { return JSON.parse(localStorage.getItem(AVAIL_KEY) || '{}') } catch { return {} }
+function loadAvailability(userId) {
+  const key = userId ? `sb_availability_${userId}` : AVAIL_KEY; try { return JSON.parse(localStorage.getItem(key) || '{}') } catch { return {} }
 }
 
 export default function Profile() {
@@ -113,7 +113,7 @@ export default function Profile() {
       form.append('upload_preset', UPLOAD_PRESET)
       const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: form })
       const data = await res.json()
-      if (data.secure_url) { localStorage.setItem(AVATAR_KEY, data.secure_url); setAvatar(data.secure_url) }
+      if (data.secure_url) { localStorage.setItem(AVATAR_KEY, data.secure_url); if (user?.id) localStorage.setItem(`sb_avatar_${user.id}`, data.secure_url); setAvatar(data.secure_url) }
     } catch (e) { console.error('Upload failed', e) }
     finally { setUploading(false) }
   }
@@ -124,7 +124,7 @@ export default function Profile() {
   }
 
   const handleSaveAvail = () => {
-    localStorage.setItem(AVAIL_KEY, JSON.stringify(avail))
+    localStorage.setItem(AVAIL_KEY, JSON.stringify(avail)); if (user?.id) localStorage.setItem(`sb_availability_${user.id}`, JSON.stringify(avail))
     setAvailSaved(true)
     setTimeout(() => setAvailSaved(false), 2000)
   }
