@@ -190,7 +190,7 @@ export default function Profile() {
         {/* Modal édition */}
         {editing && (
           <div className="fixed inset-0 z-[500] bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-8 w-[440px] max-w-full shadow-2xl">
+            <div className="bg-white rounded-2xl p-8 w-[440px] max-w-full max-h-[90vh] overflow-y-auto shadow-2xl">
               <h2 className="text-[20px] font-black text-[#1A1410] mb-5">Modifier le profil</h2>
               {editError && <p className="text-red-500 text-[13px] mb-3">{editError}</p>}
               <div className="flex gap-3 mb-3">
