@@ -1,3 +1,4 @@
+// src/services/api.js
 import axios from 'axios'
 import useAuthStore from '../store/authStore'
 
@@ -6,66 +7,44 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-export const getApiError = (error) =>
-  error?.response?.data?.message || error?.message || 'Something went wrong'
-
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error?.response?.status === 401) {
-      useAuthStore.getState().logout()
-    }
-    return Promise.reject(error)
-  }
-)
+// Helper pour extraire le message d'erreur proprement
+export const getApiError = (err) =>
+  err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Unknown error'
 
+// ── Auth ────────────────────────────────────────────────
 export const authApi = {
-  register: (payload) => api.post('/auth/register', payload).then((res) => res.data),
-  login: (payload) => api.post('/auth/login', payload).then((res) => res.data),
-  me: () => api.get('/auth/me').then((res) => res.data.user),
+  login:    (body) => api.post('/auth/login', body).then(r => r.data),
+  register: (body) => api.post('/auth/register', body).then(r => r.data),
+  me:       ()     => api.get('/auth/me').then(r => r.data.user),
 }
 
-export const userApi = {
-  me: () => api.get('/users/me').then((res) => res.data.user),
-  updateMe: (payload) => api.patch('/users/me', payload).then((res) => res.data.user),
-  getById: (id) => api.get(`/users/${id}`).then((res) => res.data.user),
-  addSkill: (payload) => api.post('/users/skills', payload).then((res) => res.data.skill),
-  deleteSkill: (id) => api.delete(`/users/skills/${id}`),
-  addLearningGoal: (payload) =>
-    api.post('/users/learning-goals', payload).then((res) => res.data.learningGoal),
-  deleteLearningGoal: (id) => api.delete(`/users/learning-goals/${id}`),
-}
-
+// ── Matches ─────────────────────────────────────────────
 export const matchApi = {
-  suggestions: () => api.get('/matches/suggestions').then((res) => res.data.matches),
-  request: (payload) => api.post('/matches/request', payload).then((res) => res.data.match),
-  mine: () => api.get('/matches/mine').then((res) => res.data.matches),
-  update: (id, status) => api.patch(`/matches/${id}`, { status }).then((res) => res.data.match),
+  suggestions: ()           => api.get('/matches/suggestions').then(r => r.data.suggestions ?? r.data),
+  mine:        ()           => api.get('/matches/mine').then(r => r.data.matches ?? r.data),
+  request:     (body)       => api.post('/matches/request', body).then(r => r.data),
+  update:      (id, status) => api.patch(`/matches/${id}`, { status }).then(r => r.data),
 }
 
-export const conversationApi = {
-  list: () => api.get('/conversations').then((res) => res.data),
-  messages: (id) => api.get(`/conversations/${id}`).then((res) => res.data),
-  sendMessage: (id, body) =>
-    api.post(`/conversations/${id}/messages`, { body }).then((res) => res.data),
+// ── Conversations ────────────────────────────────────────
+export const convApi = {
+  list:     ()         => api.get('/conversations').then(r => r.data.conversations ?? r.data),
+  messages: (id)       => api.get(`/conversations/${id}/messages`).then(r => r.data.messages ?? r.data),
+  send:     (id, body) => api.post(`/conversations/${id}/messages`, { body }).then(r => r.data),
 }
 
+// ── Sessions ─────────────────────────────────────────────
 export const sessionApi = {
-  create: (payload) => api.post('/sessions', payload).then((res) => res.data),
-  join: (id) => api.post(`/sessions/${id}/join`).then((res) => res.data),
-  end: (id) => api.post(`/sessions/${id}/end`).then((res) => res.data),
-}
-
-export const creditApi = {
-  get: () => api.get('/credits').then((res) => res.data),
+  list:    ()       => api.get('/sessions/mine').then(r => r.data.sessions ?? r.data),
+  get:     (id)     => api.get(`/sessions/${id}`).then(r => r.data.session ?? r.data),
+  create:  (body)   => api.post('/sessions', body).then(r => r.data),
+  end:     (id, s)  => api.post(`/sessions/${id}/end`, { durationSeconds: s }).then(r => r.data),
 }
 
 export default api

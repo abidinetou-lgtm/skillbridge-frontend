@@ -1,36 +1,29 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
-const useAuthStore = create(
-  persist(
-    (set) => ({
-      user: null,
-      token: null,
-      authReady: false,
+const useAuthStore = create((set) => ({
+  user:      null,
+  token:     localStorage.getItem('sb_token') || null,
+  authReady: false,
 
-      modalOpen: false,
-      modalMode: 'login',
+  modalOpen: false,
+  modalMode: 'login',
 
-      setAuth: (user, token) => set({ user, token, modalOpen: false, authReady: true }),
-      setUser: (user) => set({ user, authReady: true }),
-      logout: () => set({ user: null, token: null, authReady: true }),
-      markAuthReady: () => set({ authReady: true }),
+  login: (user, token) => {
+    localStorage.setItem('sb_token', token)
+    set({ user, token, modalOpen: false, authReady: true })
+  },
 
-      openModal: (mode = 'login') => set({ modalOpen: true, modalMode: mode }),
-      closeModal: () => set({ modalOpen: false }),
-      switchMode: (mode) => set({ modalMode: mode }),
-    }),
-    {
-      name: 'skillbridge-auth',
-      partialize: (state) => ({
-        user: state.user,
-        token: state.token,
-      }),
-      onRehydrateStorage: () => (state) => {
-        state?.markAuthReady()
-      },
-    }
-  )
-)
+  logout: () => {
+    localStorage.removeItem('sb_token')
+    set({ user: null, token: null, authReady: true })
+  },
+
+  setUser:       (user) => set({ user, authReady: true }),
+  markAuthReady: ()     => set({ authReady: true }),
+
+  openModal:  (mode = 'login') => set({ modalOpen: true,  modalMode: mode }),
+  closeModal: ()               => set({ modalOpen: false }),
+  switchMode: (mode)           => set({ modalMode: mode }),
+}))
 
 export default useAuthStore
