@@ -36,7 +36,7 @@ export default function Profile() {
 
   const [tab,      setTab]     = useState('skills')
   const [profile,  setProfile] = useState(null)
-  const [sessions, setSessions] = useState([])\
+ const [sessions,  setSessions] = useState([])
   const [loading,  setLoading] = useState(true)
   const [avail,    setAvail]   = useState(loadAvailability)
   const [availSaved, setAvailSaved] = useState(false)
