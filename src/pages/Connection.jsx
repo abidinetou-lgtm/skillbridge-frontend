@@ -1,225 +1,270 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback } from 'react'
 import useAuthStore from '../store/authStore'
-import { getApiError, matchApi } from '../services/api'
-
-const TAG_STYLES = {
-  sand: 'bg-[#FAF5E8] text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
-  night: 'bg-[#ECEEF8] text-[#252840]',
-  sage: 'bg-[#E4EED8] text-[#3D5C28]',
-}
+import api from '../services/api'
+import { CATEGORIES, SKILL_TO_CATEGORY } from '../data/categories'
+import MOCK_USERS from '../data/mockUsers'
+import MemberCard from '../components/MemberCard'
+import ProfileModal from '../components/ProfileModal'
 
 export default function Connection() {
-  const navigate = useNavigate()
   const { user, openModal } = useAuthStore()
-  const [search, setSearch] = useState('')
-  const [suggestions, setSuggestions] = useState([])
-  const [matches, setMatches] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [busyId, setBusyId] = useState(null)
 
-  const load = async () => {
-    if (!user) {
-      setSuggestions([])
-      setMatches([])
-      return
-    }
+  const [tab,           setTab]          = useState('discover')
+  const [category,      setCategory]     = useState('all')
+  const [search,        setSearch]       = useState('')
+  const [selectedMember, setSelected]    = useState(null)
 
-    setLoading(true)
-    setError('')
+  // Données API
+  const [incoming,  setIncoming]  = useState([])
+  const [requested, setRequested] = useState(new Set())
+  const [apiUsers,  setApiUsers]  = useState([])
+
+  // Fusionner mock + API (les vrais utilisateurs en premier dans "Tous")
+  const allMembers = [
+    ...apiUsers.map(u => ({
+      id:          u.id,
+      firstName:   u.firstName,
+      lastName:    u.lastName,
+      bio:         u.bio || '',
+      credits:     undefined,
+      reputation:  4.5,
+      reviewCount: 0,
+      teaches:     (u.teachingSkills || []).map(s => s.skill?.name ?? s),
+      wants:       (u.learningGoals  || []).map(s => s.skill?.name ?? s),
+      category:    SKILL_TO_CATEGORY[(u.teachingSkills?.[0]?.skill?.name)] ?? 'all',
+      availability: {},
+      color: ['#252840','#C8864B','#3D5C28','#363B6B'][Math.abs((u.id.charCodeAt(0) ?? 0) % 4)],
+    })),
+    ...MOCK_USERS,
+  ]
+
+  const loadData = useCallback(async () => {
+    if (!user) return
     try {
-      const [nextSuggestions, myMatches] = await Promise.all([
-        matchApi.suggestions(),
-        matchApi.mine(),
+      const [sugRes, matchRes] = await Promise.all([
+        api.get('/matches/suggestions'),
+        api.get('/matches/mine'),
       ])
-      setSuggestions(nextSuggestions)
-      setMatches(myMatches)
-    } catch (err) {
-      setError(getApiError(err))
-    } finally {
-      setLoading(false)
+      setApiUsers(sugRes.data.suggestions || [])
+      const matches = matchRes.data.matches || []
+      setIncoming(matches.filter(m => m.receiverId === user.id && m.status === 'PENDING'))
+      setRequested(new Set(matches.filter(m => m.requesterId === user.id).map(m => m.receiverId)))
+    } catch (e) {
+      console.error(e)
     }
-  }
+  }, [user])
 
   useEffect(() => {
-    load()
-  }, [user?.id])
+    loadData()
+    const id = setInterval(loadData, 3000)
+    return () => clearInterval(id)
+  }, [loadData])
 
-  const requestedReceiverIds = useMemo(
-    () => new Set(matches.filter((match) => match.requesterId === user?.id && match.status === 'PENDING').map((match) => match.receiverId)),
-    [matches, user?.id]
-  )
-
-  const filtered = suggestions.filter((profile) => {
-    const fullName = `${profile.firstName} ${profile.lastName}`.toLowerCase()
-    const query = search.toLowerCase()
-    return !query || fullName.includes(query) || profile.teachingSkills?.some((item) => item.skill.name.toLowerCase().includes(query))
-  })
-
-  const sendRequest = async (event, profile) => {
-    event.stopPropagation()
-    if (!user) {
-      openModal('login')
+  const handleConnect = async (memberId) => {
+    if (!user) { openModal('login'); return }
+    if (memberId.startsWith('mock-')) {
+      setRequested(prev => new Set([...prev, memberId]))
       return
     }
-
-    setBusyId(profile.id)
-    setError('')
     try {
-      const skillId = profile.teachingSkills?.[0]?.skill?.id
-      await matchApi.request({ receiverId: profile.id, skillId })
-      await load()
-    } catch (err) {
-      setError(getApiError(err))
-    } finally {
-      setBusyId(null)
+      await api.post('/matches/request', { receiverId: memberId })
+      setRequested(prev => new Set([...prev, memberId]))
+    } catch (e) {
+      alert(e.response?.data?.message || 'Erreur lors de la demande')
     }
   }
 
-  const updateMatch = async (id, status) => {
-    setBusyId(id)
-    setError('')
+  const handleAccept = async (matchId, requesterId) => {
     try {
-      await matchApi.update(id, status)
-      await load()
-    } catch (err) {
-      setError(getApiError(err))
-    } finally {
-      setBusyId(null)
+      await api.patch(`/matches/${matchId}`, { status: 'ACCEPTED' })
+      setIncoming(prev => prev.filter(m => m.id !== matchId))
+      setRequested(prev => new Set([...prev, requesterId]))
+    } catch (e) {
+      alert(e.response?.data?.message || 'Erreur')
     }
   }
 
-  const incoming = matches.filter((match) => match.receiverId === user?.id && match.status === 'PENDING')
-  const accepted = matches.filter((match) => match.status === 'ACCEPTED')
+  const handleDecline = async (matchId) => {
+    try {
+      await api.patch(`/matches/${matchId}`, { status: 'REJECTED' })
+      setIncoming(prev => prev.filter(m => m.id !== matchId))
+    } catch (e) {
+      alert(e.response?.data?.message || 'Erreur')
+    }
+  }
+
+  // Filtrage par catégorie + recherche
+  const filtered = allMembers.filter(m => {
+    if (category !== 'all') {
+      const cat = CATEGORIES.find(c => c.key === category)
+      if (cat) {
+        const matchesCat = m.teaches.some(s => cat.skills.includes(s))
+        if (!matchesCat) return false
+      }
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      return (
+        `${m.firstName} ${m.lastName}`.toLowerCase().includes(q) ||
+        m.teaches.some(s => s.toLowerCase().includes(q)) ||
+        m.wants.some(s => s.toLowerCase().includes(q))
+      )
+    }
+    return true
+  })
 
   return (
-    <main className="pt-[62px] min-h-screen bg-[#F8F4EA]">
-      <div className="bg-[#FDFAF4] border-b border-black/[0.09] px-20 py-10">
-        <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Find your match</p>
-        <h1 className="text-[38px] font-black tracking-[-1.5px] text-[#1A1410] leading-[1.05] mb-4">
-          Connections <span className="text-[#252840]">for you</span>
-        </h1>
-        <div className="flex gap-3 max-w-[680px]">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or skill..."
-            className="w-full px-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-[#F8F4EA] text-[13px] text-[#1A1410] outline-none focus:border-[#252840] transition-all"
-          />
+    <main className="pt-[62px] min-h-screen bg-white">
+
+      {selectedMember && (
+        <ProfileModal member={selectedMember} onClose={() => setSelected(null)} />
+      )}
+
+      {/* ── Header ── */}
+      <div className="bg-white border-b border-black/[0.09] px-8 md:px-20 py-8">
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">
+              Trouver un pair
+            </p>
+            <h1 className="text-[34px] font-black tracking-[-1.2px] text-[#1A1410]">
+              Connexions
+            </h1>
+            <p className="text-[13px] text-[#7A6E5C] mt-1">
+              Découvrez des membres qui partagent vos centres d'intérêt
+            </p>
+          </div>
+          {incoming.length > 0 && (
+            <button
+              onClick={() => setTab('requests')}
+              className="flex items-center gap-2 bg-[#C8864B] text-white px-4 py-2 rounded-full text-[13px] font-bold cursor-pointer border-none hover:bg-[#B07030] transition-all"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="7" cy="5" r="3"/><path d="M1 13c0-3.3 2.7-6 6-6s6 2.7 6 6"/>
+              </svg>
+              {incoming.length} demande{incoming.length > 1 ? 's' : ''} en attente
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-6 border-b border-black/[0.07]">
+          {[
+            { key: 'discover',  label: 'Découvrir' },
+            { key: 'requests',  label: `Demandes (${incoming.length})` },
+          ].map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={`px-5 py-3 text-[13px] font-semibold border-none bg-transparent cursor-pointer border-b-2 -mb-px transition-all
+                ${tab === t.key ? 'text-[#252840] border-[#252840]' : 'text-[#7A6E5C] border-transparent hover:text-[#1A1410]'}`}>
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="px-20 py-8 flex flex-col gap-6">
-        {!user && (
-          <div className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl p-6 text-center">
-            <p className="text-[14px] text-[#7A6E5C] mb-4">Log in to load real backend match suggestions.</p>
-            <button onClick={() => openModal('login')} className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer">
-              Log in
-            </button>
-          </div>
-        )}
-
-        {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 text-[13px] text-red-600">{error}</div>}
-        {loading && <div className="text-[14px] text-[#7A6E5C]">Loading real matches...</div>}
-
-        {user && incoming.length > 0 && (
-          <section>
-            <h2 className="text-[16px] font-black text-[#1A1410] mb-3">Incoming requests</h2>
-            <div className="flex flex-col gap-3">
-              {incoming.map((match) => {
-                const requester = match.requester
-                return (
-                  <div key={match.id} className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl p-5 flex items-center gap-5">
-                    <Avatar user={requester} />
-                    <div className="flex-1">
-                      <div className="text-[16px] font-bold text-[#1A1410]">{requester.firstName} {requester.lastName}</div>
-                      <p className="text-[13px] text-[#7A6E5C]">{match.skill?.name ? `Wants to connect for ${match.skill.name}` : 'Wants to connect'}</p>
-                    </div>
-                    <button onClick={() => updateMatch(match.id, 'ACCEPTED')} disabled={busyId === match.id} className="px-4 py-[9px] rounded-xl bg-[#3D5C28] text-white text-[12px] font-bold border-none cursor-pointer disabled:opacity-50">Accept</button>
-                    <button onClick={() => updateMatch(match.id, 'REJECTED')} disabled={busyId === match.id} className="px-4 py-[9px] rounded-xl border border-black/[0.09] text-[#7A6E5C] text-[12px] font-bold bg-transparent cursor-pointer disabled:opacity-50">Reject</button>
-                  </div>
-                )
-              })}
+      {/* ── Demandes reçues ── */}
+      {tab === 'requests' && (
+        <div className="px-8 md:px-20 py-8 max-w-[860px]">
+          {incoming.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl border border-black/[0.09]">
+              <svg className="mx-auto mb-3 text-[#C0B8AC]" width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <circle cx="20" cy="14" r="7"/><path d="M4 36c0-8.8 7.2-16 16-16s16 7.2 16 16"/>
+              </svg>
+              <p className="text-[16px] font-semibold text-[#1A1410] mb-1">Aucune demande en attente</p>
+              <p className="text-[13px] text-[#7A6E5C]">
+                Quand un membre veut se connecter avec vous, la demande apparaît ici.
+              </p>
             </div>
-          </section>
-        )}
-
-        {user && accepted.length > 0 && (
-          <section>
-            <h2 className="text-[16px] font-black text-[#1A1410] mb-3">Accepted connections</h2>
+          ) : (
             <div className="flex flex-col gap-3">
-              {accepted.map((match) => {
-                const partner = match.requesterId === user.id ? match.receiver : match.requester
-                return (
-                  <div key={match.id} className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl p-5 flex items-center gap-5">
-                    <Avatar user={partner} />
-                    <div className="flex-1">
-                      <div className="text-[16px] font-bold text-[#1A1410]">{partner.firstName} {partner.lastName}</div>
-                      <p className="text-[13px] text-[#7A6E5C]">Connected{match.conversation?.id ? ` · conversation ${match.conversation.id.slice(0, 8)}` : ''}</p>
-                    </div>
+              {incoming.map(m => (
+                <div key={m.id} className="bg-white border border-black/[0.09] rounded-2xl p-5 flex items-center gap-5">
+                  <div className="w-12 h-12 rounded-full bg-[#252840] flex items-center justify-center font-bold text-white text-[16px] flex-shrink-0">
+                    {m.requester?.firstName?.[0]}{m.requester?.lastName?.[0]}
                   </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        {user && (
-          <section>
-            <h2 className="text-[16px] font-black text-[#1A1410] mb-3">Suggested matches</h2>
-            {!loading && filtered.length === 0 && (
-              <div className="text-center py-16 text-[#7A6E5C] bg-[#FDFAF4] border border-black/[0.09] rounded-2xl">
-                <p className="text-[16px] font-semibold">No real suggestions yet</p>
-                <p className="text-[13px] mt-1">Add learning goals in your profile, then users who teach those skills will appear here.</p>
-              </div>
-            )}
-            <div className="flex flex-col gap-4">
-              {filtered.map((profile) => (
-                <div key={profile.id} onClick={() => navigate(`/user/${profile.id}`)} className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl p-5 flex items-center gap-5 cursor-pointer hover:-translate-y-[2px] hover:shadow-[0_8px_32px_rgba(26,20,16,0.08)] transition-all group">
-                  <Avatar user={profile} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[16px] font-bold text-[#1A1410] group-hover:text-[#252840] transition-all">{profile.firstName} {profile.lastName}</span>
-                    </div>
-                    <p className="text-[13px] text-[#7A6E5C] leading-[1.5] mb-3 line-clamp-1">{profile.bio || 'No bio yet.'}</p>
-                    <div className="flex gap-6 items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-[0.6px] text-[#7A6E5C]">Teaches</span>
-                        <div className="flex gap-[5px] flex-wrap">
-                          {profile.teachingSkills?.map((item) => (
-                            <span key={item.id} className={`px-[9px] py-[3px] rounded-full text-[11px] font-semibold ${TAG_STYLES.sand}`}>{item.skill.name}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex-1">
+                    <p className="text-[15px] font-bold text-[#1A1410]">
+                      {m.requester?.firstName} {m.requester?.lastName}
+                    </p>
+                    <p className="text-[12px] text-[#7A6E5C]">souhaite se connecter avec vous</p>
                   </div>
-                  <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {requestedReceiverIds.has(profile.id) ? (
-                      <div className="px-5 py-[10px] rounded-xl bg-[#E4EED8] text-[#3D5C28] text-[13px] font-bold">Request sent</div>
-                    ) : (
-                      <button onClick={(e) => sendRequest(e, profile)} disabled={busyId === profile.id} className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all whitespace-nowrap disabled:opacity-50">
-                        {busyId === profile.id ? 'Sending...' : 'Request connection'}
-                      </button>
-                    )}
+                  <div className="flex gap-2">
+                    <button onClick={() => handleAccept(m.id, m.requesterId)}
+                      className="px-5 py-[9px] rounded-xl bg-[#3D5C28] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all">
+                      Accepter
+                    </button>
+                    <button onClick={() => handleDecline(m.id)}
+                      className="px-5 py-[9px] rounded-xl border-[1.5px] border-black/[0.09] text-[#7A6E5C] text-[13px] font-semibold bg-transparent cursor-pointer hover:border-red-400 hover:text-red-500 transition-all">
+                      Décliner
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
-        )}
-      </div>
-    </main>
-  )
-}
+          )}
+        </div>
+      )}
 
-function Avatar({ user }) {
-  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase() || 'U'
-  return (
-    <div className="relative flex-shrink-0">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center font-black text-[22px] text-white bg-[#252840]">
-        {initials}
-      </div>
-    </div>
+      {/* ── Découvrir ── */}
+      {tab === 'discover' && (
+        <div className="px-8 md:px-20 py-8">
+
+          {/* Catégories */}
+          <div className="flex gap-2 flex-wrap mb-5">
+            {CATEGORIES.map(cat => (
+              <button key={cat.key} onClick={() => setCategory(cat.key)}
+                className={`px-4 py-[8px] rounded-full text-[12px] font-semibold border-[1.5px] cursor-pointer transition-all
+                  ${category === cat.key
+                    ? 'bg-[#252840] text-white border-[#252840]'
+                    : 'bg-white text-[#7A6E5C] border-black/[0.09] hover:border-[#252840] hover:text-[#1A1410]'}`}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Recherche */}
+          <div className="mb-6">
+            <div className="relative max-w-[420px]">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0A898]" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="7" cy="7" r="5"/><path d="M12 12l2 2"/>
+              </svg>
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Rechercher par nom ou compétence…"
+                className="w-full pl-9 pr-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-white text-[13px] outline-none focus:border-[#252840] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Résultats */}
+          {filtered.length === 0 ? (
+            <div className="text-center py-20">
+              <p className="text-[16px] font-semibold text-[#1A1410] mb-2">Aucun membre trouvé</p>
+              <p className="text-[13px] text-[#7A6E5C]">
+                Essayez une autre catégorie ou ajoutez des compétences à votre profil.
+              </p>
+            </div>
+          ) : (
+            <>
+              <p className="text-[12px] text-[#7A6E5C] mb-4 font-semibold">
+                {filtered.length} membre{filtered.length > 1 ? 's' : ''}
+                {category !== 'all' ? ` · ${CATEGORIES.find(c => c.key === category)?.label}` : ''}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filtered.map(m => (
+                  <MemberCard
+                    key={m.id}
+                    member={m}
+                    onClick={() => setSelected(m)}
+                    connectionState={requested.has(m.id) ? 'requested' : 'none'}
+                    onReserve={handleConnect}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </main>
   )
 }
