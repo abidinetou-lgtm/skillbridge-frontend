@@ -7,14 +7,13 @@ const CLOUD_NAME    = 'derho2rib'
 const UPLOAD_PRESET = 'skillbridge_avatars'
 
 const TAG = {
-  sand:  'bg-[#FAF5E8] text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
-  sage:  'bg-[#E4EED8] text-[#3D5C28]',
+  sand: 'bg-[#FAF5E8] text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
+  sage: 'bg-[#E4EED8] text-[#3D5C28]',
 }
 
 const DAYS  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']
 const SLOTS = ['Matin', 'Midi', 'Soir']
 const SLOT_HINTS = { Matin: '8h–12h', Midi: '12h–14h', Soir: '18h–22h' }
-
 const AVAIL_KEY  = 'sb_availability'
 const AVATAR_KEY = 'sb_avatar'
 
@@ -140,25 +139,46 @@ export default function Profile() {
 
         {/* Avatar + boutons */}
         <div className="flex items-end justify-between -mt-[52px] mb-5">
-          <div className="relative group">
-            <div className="w-[104px] h-[104px] rounded-full border-4 border-white bg-[#252840] flex items-center justify-center font-black text-[32px] text-white overflow-hidden">
-              {avatar ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" /> : initials}
+
+          {/* Avatar cliquable pour changer la photo */}
+          <div className="relative">
+            <div className="w-[104px] h-[104px] rounded-full border-4 border-white bg-[#252840] flex items-center justify-center font-black text-[32px] text-white overflow-hidden cursor-pointer"
+              onClick={() => fileRef.current?.click()}
+              title="Changer la photo de profil">
+              {avatar
+                ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                : initials
+              }
             </div>
-            <button onClick={() => fileRef.current?.click()} disabled={uploading}
-              className="absolute inset-0 rounded-full bg-black/40 text-white text-[11px] font-bold opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer border-none">
-              {uploading ? '…' : '📷'}
-            </button>
+            {/* Overlay au survol */}
+            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-all cursor-pointer pointer-events-none">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+            {uploading && (
+              <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              </div>
+            )}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
           </div>
 
           <div className="flex gap-2 mb-1 flex-wrap justify-end">
             <button onClick={startEdit}
-              className="px-4 py-2 rounded-xl border-[1.5px] border-black/[0.09] text-[#1A1410] text-[12px] font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-all">
-              ✏️ Modifier
+              className="px-4 py-2 rounded-xl border-[1.5px] border-black/[0.09] text-[#1A1410] text-[12px] font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-all flex items-center gap-2">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M9.5 1.5l2 2L4 11H2v-2L9.5 1.5z"/>
+              </svg>
+              Modifier le profil
             </button>
             <button onClick={() => navigate('/sessions/new')}
-              className="px-4 py-2 rounded-xl bg-[#252840] text-white text-[12px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
-              + Séance
+              className="px-4 py-2 rounded-xl bg-[#252840] text-white text-[12px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all flex items-center gap-2">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M6 1v10M1 6h10"/>
+              </svg>
+              Nouvelle séance
             </button>
             <button onClick={() => { logout(); navigate('/') }}
               className="px-4 py-2 rounded-xl border-[1.5px] border-black/[0.09] text-[#7A6E5C] text-[12px] font-semibold bg-transparent cursor-pointer hover:border-red-300 hover:text-red-500 transition-all">
@@ -191,6 +211,25 @@ export default function Profile() {
                   placeholder="Parlez de vous, de vos compétences…"
                   className="px-3 py-2 rounded-lg border-[1.5px] border-black/[0.09] text-[14px] bg-[#F8F4EA] outline-none focus:border-[#252840] transition-all resize-none" />
               </div>
+
+              {/* Option changer la photo depuis le modal */}
+              <div className="flex items-center gap-3 mb-5 p-3 bg-[#F8F4EA] rounded-xl">
+                <div className="w-12 h-12 rounded-full bg-[#252840] flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {avatar
+                    ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                    : <span className="text-white font-black text-[16px]">{initials}</span>
+                  }
+                </div>
+                <div className="flex-1">
+                  <p className="text-[12px] font-semibold text-[#1A1410]">Photo de profil</p>
+                  <p className="text-[11px] text-[#7A6E5C]">JPG, PNG — max 5MB</p>
+                </div>
+                <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                  className="px-3 py-[6px] rounded-lg border-[1.5px] border-black/[0.09] text-[12px] font-semibold text-[#1A1410] bg-white cursor-pointer hover:border-[#252840] transition-all flex-shrink-0">
+                  {uploading ? 'Upload…' : 'Changer'}
+                </button>
+              </div>
+
               <div className="flex gap-2">
                 <button onClick={saveEdit} disabled={editSaving}
                   className="flex-1 py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50">
@@ -205,25 +244,46 @@ export default function Profile() {
           </div>
         )}
 
+        {/* Nom + bio */}
         <h1 className="text-[26px] font-black tracking-tight text-[#1A1410]">{displayName}</h1>
         <p className="text-[13px] text-[#7A6E5C] mt-[2px]">{user?.email}</p>
         {profile?.bio && <p className="text-[14px] text-[#3D3020] leading-[1.7] mt-3 max-w-[560px]">{profile.bio}</p>}
 
-        {/* Stats */}
+        {/* Stats crédits */}
         <div className="flex gap-4 mt-5 flex-wrap">
-          {[
-            { value: credits,           label: 'crédits disponibles', color: '#252840', bg: '#ECEEF8' },
-            { value: `+${totalEarned}`, label: 'crédits gagnés',      color: '#3D5C28', bg: '#E4EED8' },
-            { value: totalSpent,        label: 'crédits dépensés',    color: '#C8864B', bg: '#FAF5E8' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-white rounded-xl border border-black/[0.09] px-5 py-3 flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ background: stat.bg }} />
-              <div>
-                <p className="text-[20px] font-black leading-none" style={{ color: stat.color }}>{stat.value}</p>
-                <p className="text-[11px] text-[#7A6E5C] mt-[1px]">{stat.label}</p>
-              </div>
+          <div className="bg-white rounded-xl border border-black/[0.09] px-5 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#ECEEF8] flex items-center justify-center flex-shrink-0">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#252840" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M5 5.5h3a1 1 0 010 2H6a1 1 0 000 2h3"/>
+              </svg>
             </div>
-          ))}
+            <div>
+              <p className="text-[20px] font-black text-[#252840] leading-none">{credits}</p>
+              <p className="text-[11px] text-[#7A6E5C] mt-[1px]">crédits disponibles</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-black/[0.09] px-5 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#E4EED8] flex items-center justify-center flex-shrink-0">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#3D5C28" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M7 13V1M2 6l5-5 5 5"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[20px] font-black text-[#3D5C28] leading-none">+{totalEarned}</p>
+              <p className="text-[11px] text-[#7A6E5C] mt-[1px]">crédits gagnés</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-black/[0.09] px-5 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#FAF5E8] flex items-center justify-center flex-shrink-0">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C8864B" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M7 1v12M2 8l5 5 5-5"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[20px] font-black text-[#C8864B] leading-none">{totalSpent}</p>
+              <p className="text-[11px] text-[#7A6E5C] mt-[1px]">crédits dépensés</p>
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -247,13 +307,17 @@ export default function Profile() {
           <div className="py-7 flex flex-col gap-8 pb-16">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#C8864B] mb-3">Ce que je partage</p>
-              {teaches.length === 0 ? <p className="text-[13px] text-[#7A6E5C] italic">Aucune compétence ajoutée.</p>
-                : <div className="flex flex-wrap gap-2">{teaches.map(ts => <span key={ts.id} className={`px-3 py-[6px] rounded-full text-[12px] font-semibold ${TAG.sand}`}>{ts.skill?.name ?? ts}</span>)}</div>}
+              {teaches.length === 0
+                ? <p className="text-[13px] text-[#7A6E5C] italic">Aucune compétence ajoutée.</p>
+                : <div className="flex flex-wrap gap-2">{teaches.map(ts => <span key={ts.id} className={`px-3 py-[6px] rounded-full text-[12px] font-semibold ${TAG.sand}`}>{ts.skill?.name ?? ts}</span>)}</div>
+              }
             </div>
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.6px] text-[#3D5C28] mb-3">Ce que j'apprends</p>
-              {wants.length === 0 ? <p className="text-[13px] text-[#7A6E5C] italic">Aucun objectif ajouté.</p>
-                : <div className="flex flex-wrap gap-2">{wants.map(lg => <span key={lg.id} className={`px-3 py-[6px] rounded-full text-[12px] font-semibold ${TAG.sage}`}>{lg.skill?.name ?? lg}</span>)}</div>}
+              {wants.length === 0
+                ? <p className="text-[13px] text-[#7A6E5C] italic">Aucun objectif ajouté.</p>
+                : <div className="flex flex-wrap gap-2">{wants.map(lg => <span key={lg.id} className={`px-3 py-[6px] rounded-full text-[12px] font-semibold ${TAG.sage}`}>{lg.skill?.name ?? lg}</span>)}</div>
+              }
             </div>
           </div>
         )}
@@ -262,7 +326,7 @@ export default function Profile() {
         {tab === 'availability' && (
           <div className="py-7 pb-16">
             <h2 className="text-[18px] font-black text-[#1A1410] mb-1">Mes créneaux disponibles</h2>
-            <p className="text-[13px] text-[#7A6E5C] mb-5">L'heure exacte se convient dans le chat.</p>
+            <p className="text-[13px] text-[#7A6E5C] mb-5">L'heure exacte se convient dans le chat avec votre pair.</p>
             <div className="bg-white border border-black/[0.09] rounded-2xl overflow-hidden">
               <div className="grid border-b border-black/[0.09]" style={{ gridTemplateColumns: '100px repeat(5, 1fr)' }}>
                 <div className="p-3" />
@@ -281,7 +345,8 @@ export default function Profile() {
                         className={`border-l border-black/[0.06] p-3 flex items-center justify-center cursor-pointer transition-all ${active ? 'bg-[#252840] hover:bg-[#363B6B]' : 'bg-white hover:bg-[#F5F5F5]'}`}>
                         {active
                           ? <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M3 8l3.5 3.5L13 4"/></svg>
-                          : <div className="w-4 h-4 rounded border-[1.5px] border-black/[0.15]" />}
+                          : <div className="w-4 h-4 rounded border-[1.5px] border-black/[0.15]" />
+                        }
                       </button>
                     )
                   })}
@@ -292,7 +357,12 @@ export default function Profile() {
               <button onClick={handleSaveAvail} className="px-6 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
                 Enregistrer
               </button>
-              {availSaved && <span className="text-[13px] text-[#3D5C28] font-semibold">✓ Enregistré</span>}
+              {availSaved && <span className="text-[13px] text-[#3D5C28] font-semibold">Enregistré</span>}
+            </div>
+            <div className="mt-5 p-4 bg-[#FAF5E8] rounded-xl border border-[rgba(223,192,128,0.4)]">
+              <p className="text-[13px] text-[#3D3020]">
+                <span className="font-bold">Comment ca marche ?</span> Quand un pair veut réserver, vous recevez une notification, puis vous créez la session et convenez de l'heure dans le chat.
+              </p>
             </div>
           </div>
         )}
