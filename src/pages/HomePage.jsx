@@ -506,95 +506,10 @@ export default function HomePage() {
         <FeedScroll />
       </section>
  
-      {/* ── FOOTER ── */}
-      <footer className="bg-[#1A1410] text-[rgba(253,250,244,0.55)] px-20 pt-14 pb-8">
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-11 pb-11 border-b border-white/[0.07]">
-          {/* Brand + équipe */}
-          <div>
-            <div className="text-[21px] font-black tracking-[-0.5px] mb-[10px]">
-              <span className="text-[rgba(253,250,244,0.88)]">Skill</span>
-              <span className="text-[#C8864B]">Bridge</span>
-            </div>
-            <p className="text-[13px] leading-[1.65] text-[rgba(253,250,244,0.35)] max-w-[265px]">
-              A peer-to-peer skill exchange platform. Teach what you know, learn what you love — safely, without sharing personal contacts.
-            </p>
-            <div className="mt-6 flex flex-col gap-[13px]">
-              <p className="text-[10px] font-bold tracking-[1.2px] uppercase text-[rgba(253,250,244,0.22)] mb-[2px]">The team</p>
-              {[
-                { name: 'Your Name — Lead Frontend', role: 'React · UI/UX', email: 'you@email.com', gh: 'YOU' },
-                { name: 'Dev 2 — Backend API',       role: 'Node.js · PostgreSQL', email: 'dev2@email.com', gh: 'DEV2' },
-                { name: 'Dev 3 — Auth & Chat',       role: 'Socket.io · WebRTC', email: 'dev3@email.com', gh: 'DEV3' },
-                { name: 'Dev 4 — Matching & DevOps', role: 'Python · Docker', email: 'dev4@email.com', gh: 'DEV4' },
-              ].map(m => (
-                <div key={m.gh}>
-                  <div className="text-[12.5px] font-semibold text-[rgba(253,250,244,0.72)]">{m.name}</div>
-                  <div className="text-[11px] text-[rgba(253,250,244,0.28)]">{m.role}</div>
-                  <div className="flex gap-[10px] mt-[3px]">
-                    <a href={`mailto:${m.email}`} className="text-[11px] text-[#C8864B] no-underline font-medium hover:text-white transition-all">Email</a>
-                    <a href={`https://github.com/${m.gh}`} className="text-[11px] text-[#C8864B] no-underline font-medium hover:text-white transition-all">GitHub</a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
- 
-          {/* Navigation */}
-          <div>
-            <p className="text-[10px] font-bold tracking-[1px] uppercase text-[rgba(253,250,244,0.25)] mb-[13px]">Pages</p>
-            <div className="flex flex-col gap-[9px]">
-              {['/', '/feed', '/chat', '/match', '/profile'].map((path, i) => (
-                <a key={path} href={path} className="text-[13px] text-[rgba(253,250,244,0.5)] no-underline hover:text-white transition-all">
-                  {['Home', 'Feed', 'Chat', 'Match', 'Profile'][i]}
-                </a>
-              ))}
-            </div>
-          </div>
- 
-          {/* GitHub */}
-          <div>
-            <p className="text-[10px] font-bold tracking-[1px] uppercase text-[rgba(253,250,244,0.25)] mb-[13px]">GitHub</p>
-            <div className="flex flex-col gap-[9px]">
-              {[
-                { label: 'Frontend repo', href: 'https://github.com/YOU/skillbridge-frontend' },
-                { label: 'Backend repo',  href: 'https://github.com/YOU/skillbridge-backend'  },
-                { label: 'Issues',        href: '#' },
-                { label: 'Documentation', href: '#' },
-              ].map(l => (
-                <a key={l.label} href={l.href} className="text-[13px] text-[rgba(253,250,244,0.5)] no-underline hover:text-white transition-all">{l.label}</a>
-              ))}
-            </div>
-          </div>
- 
-          {/* Contact */}
-          <div>
-            <p className="text-[10px] font-bold tracking-[1px] uppercase text-[rgba(253,250,244,0.25)] mb-[13px]">Contact</p>
-            <div className="flex flex-col gap-[9px]">
-              {[
-                { label: 'contact@skillbridge.dev', href: 'mailto:contact@skillbridge.dev' },
-                { label: 'Discord',           href: '#' },
-                { label: 'Report a bug',      href: '#' },
-                { label: 'Suggest a feature', href: '#' },
-              ].map(l => (
-                <a key={l.label} href={l.href} className="text-[13px] text-[rgba(253,250,244,0.5)] no-underline hover:text-white transition-all">{l.label}</a>
-              ))}
-            </div>
-          </div>
-        </div>
- 
-        <div className="pt-[26px] flex items-center justify-between text-[11px] text-[rgba(253,250,244,0.22)]">
-          <span>© 2025 SkillBridge — School project.</span>
-          <span>
-            <a href="/privacy" className="text-[rgba(253,250,244,0.35)] no-underline hover:text-white">Privacy</a>
-            {' · '}
-            <a href="/terms"   className="text-[rgba(253,250,244,0.35)] no-underline hover:text-white">Terms</a>
-            {' · Made with care by team SB'}
-          </span>
-        </div>
-      </footer>
+
     </main>
   )
 }
- 
 // ─── PETITES ILLUSTRATIONS SVG pour les posts ─────────────────────────────
 function PostIllustration({ index }) {
   const bgs = ['#EEEADE','#F2E8D2','#E6F0DA','#EAE6F5','#FAF0E2']
@@ -610,7 +525,7 @@ function PostIllustration({ index }) {
     </div>
   )
 }
- 
+
 function HeartIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -618,7 +533,7 @@ function HeartIcon() {
     </svg>
   )
 }
- 
+
 function CommentIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
