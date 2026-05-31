@@ -18,15 +18,16 @@ function colorFor(id) {
 // Récupère l'avatar stocké localement pour un userId donné
 // (chaque utilisateur stocke son propre avatar sous sb_avatar_<userId>)
 // Pour l'instant on stocke sous sb_avatar (sans id) mais on lit les deux
-function getAvatarFor(userId) {
-  return localStorage.getItem(`${AVATAR_KEY}${userId}`) || ''
+function getAvatarFor(u) {
+  return (u && u.avatarUrl) ? u.avatarUrl : ''
 }
 
 // Récupère les disponibilités stockées localement pour un userId
-function getAvailFor(userId) {
-  try {
-    return JSON.parse(localStorage.getItem(`${AVAIL_KEY}${userId}`) || '{}')
-  } catch { return {} }
+function getAvailFor(u) {
+  if (u && u.availability) {
+    try { return JSON.parse(u.availability) } catch {}
+  }
+  return {}
 }
 
 function matchScore(member, myGoals, mySkills) {
@@ -40,8 +41,8 @@ function matchScore(member, myGoals, mySkills) {
   return score
 }
 
-function Avatar({ userId, firstName, lastName, color, size = 'md' }) {
-  const avatar = getAvatarFor(userId)
+function Avatar({ user: u, firstName, lastName, color, size = 'md' }) {
+  const avatar = getAvatarFor(u)
   const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase()
   const sz = size === 'lg' ? 'w-16 h-16 text-xl' : size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'
   return (
@@ -102,11 +103,13 @@ export default function Connection() {
   const mySkills = (myProfile?.teachingSkills  || []).map(s => s.skill?.name ?? s)
 
   const members = allUsers.map(u => ({
-    id:       u.id,
-    firstName: u.firstName,
-    lastName:  u.lastName,
-    bio:       u.bio || '',
-    credits:   u.credits,
+    id:           u.id,
+    firstName:    u.firstName,
+    lastName:     u.lastName,
+    bio:          u.bio || '',
+    credits:      u.credits,
+    avatarUrl:    u.avatarUrl || '',
+    availability: u.availability || null,
     teaches:   (u.teachingSkills || []).map(s => s.skill?.name ?? s),
     wants:     (u.learningGoals  || []).map(s => s.skill?.name ?? s),
     color:     colorFor(u.id),
@@ -159,7 +162,7 @@ export default function Connection() {
   }
 
   // Disponibilités du membre sélectionné
-  const memberAvail = selectedMember ? getAvailFor(selectedMember.id) : {}
+  const memberAvail = selectedMember ? getAvailFor(selectedMember) : {}
   const hasAvail    = Object.values(memberAvail).some(Boolean)
 
   return (
@@ -179,7 +182,7 @@ export default function Connection() {
                 ✕
               </button>
               <div className="flex items-center gap-4">
-                <Avatar userId={selectedMember.id} firstName={selectedMember.firstName} lastName={selectedMember.lastName} color={selectedMember.color} size="lg" />
+                <Avatar user={selectedMember} firstName={selectedMember.firstName} lastName={selectedMember.lastName} color={selectedMember.color} size="lg" />
                 <div>
                   <h2 className="text-[20px] font-black text-[#1A1410]">{selectedMember.firstName} {selectedMember.lastName}</h2>
                   {selectedMember.bio && <p className="text-[13px] text-[#7A6E5C] mt-1">{selectedMember.bio}</p>}
@@ -330,7 +333,7 @@ export default function Connection() {
             <div className="flex flex-col gap-3">
               {incoming.map(m => (
                 <div key={m.id} className="bg-white border border-black/[0.09] rounded-2xl p-5 flex items-center gap-4">
-                  <Avatar userId={m.requesterId} firstName={m.requester?.firstName} lastName={m.requester?.lastName} color={colorFor(m.requesterId)} size="md" />
+                  <Avatar user={null} firstName={m.requester?.firstName} lastName={m.requester?.lastName} color={colorFor(m.requesterId)} size="md" />
                   <div className="flex-1">
                     <p className="text-[15px] font-bold text-[#1A1410]">{m.requester?.firstName} {m.requester?.lastName}</p>
                     <p className="text-[12px] text-[#7A6E5C]">souhaite se connecter avec vous</p>
@@ -415,7 +418,7 @@ export default function Connection() {
                     )}
 
                     <div className="flex items-center gap-3 mb-3">
-                      <Avatar userId={m.id} firstName={m.firstName} lastName={m.lastName} color={m.color} size="md" />
+                      <Avatar user={m} firstName={m.firstName} lastName={m.lastName} color={m.color} size="md" />
                       <div className="min-w-0">
                         <p className="text-[14px] font-bold text-[#1A1410] truncate">{m.firstName} {m.lastName}</p>
                         {m.bio && <p className="text-[11px] text-[#7A6E5C] truncate">{m.bio}</p>}

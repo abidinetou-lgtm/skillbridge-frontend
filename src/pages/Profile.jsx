@@ -47,8 +47,11 @@ export default function Profile() {
     if (!user) return
     Promise.all([api.get('/users/me'), api.get('/sessions/mine')])
       .then(([profRes, sessRes]) => {
-        setProfile(profRes.data.user)
+        const p = profRes.data.user
+        setProfile(p)
         setSessions(sessRes.data.sessions ?? [])
+        if (p.avatarUrl) setAvatar(p.avatarUrl)
+        if (p.availability) { try { setAvail(JSON.parse(p.availability)) } catch {} }
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -113,7 +116,11 @@ export default function Profile() {
       form.append('upload_preset', UPLOAD_PRESET)
       const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: form })
       const data = await res.json()
-      if (data.secure_url) { localStorage.setItem(AVATAR_KEY, data.secure_url); if (user?.id) localStorage.setItem(`sb_avatar_${user.id}`, data.secure_url); setAvatar(data.secure_url) }
+      if (data.secure_url) {
+        localStorage.setItem(AVATAR_KEY, data.secure_url)
+        setAvatar(data.secure_url)
+        await api.put('/users/me', { avatarUrl: data.secure_url }).catch(() => {})
+      }
     } catch (e) { console.error('Upload failed', e) }
     finally { setUploading(false) }
   }
@@ -123,8 +130,10 @@ export default function Profile() {
     setAvailSaved(false)
   }
 
-  const handleSaveAvail = () => {
-    localStorage.setItem(AVAIL_KEY, JSON.stringify(avail)); if (user?.id) localStorage.setItem(`sb_availability_${user.id}`, JSON.stringify(avail))
+  const handleSaveAvail = async () => {
+    const json = JSON.stringify(avail)
+    localStorage.setItem(AVAIL_KEY, json)
+    await api.put('/users/me', { availability: json }).catch(() => {})
     setAvailSaved(true)
     setTimeout(() => setAvailSaved(false), 2000)
   }
