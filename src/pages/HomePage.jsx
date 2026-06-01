@@ -3,6 +3,7 @@
 // Les données sont en dur pour l'instant — Dev 2 les remplacera par de vrais appels API
  
 import { useState, useEffect, useRef } from 'react'
+import Footer from '../components/Footer'
 import useAuthStore from '../store/authStore'
  
 // ─── DONNÉES (temporaires — seront remplacées par l'API) ───────────────────
@@ -506,10 +507,11 @@ export default function HomePage() {
         <FeedScroll />
       </section>
  
-
+      <Footer />
     </main>
   )
 }
+ 
 // ─── PETITES ILLUSTRATIONS SVG pour les posts ─────────────────────────────
 function PostIllustration({ index }) {
   const bgs = ['#EEEADE','#F2E8D2','#E6F0DA','#EAE6F5','#FAF0E2']
@@ -525,7 +527,7 @@ function PostIllustration({ index }) {
     </div>
   )
 }
-
+ 
 function HeartIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -533,7 +535,7 @@ function HeartIcon() {
     </svg>
   )
 }
-
+ 
 function CommentIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
