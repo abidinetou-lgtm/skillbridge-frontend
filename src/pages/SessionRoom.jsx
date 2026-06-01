@@ -10,24 +10,23 @@ export default function SessionRoom() {
   const { id }      = useParams()
   const navigate    = useNavigate()
   const { user }    = useAuthStore()
-  const jitsiRef    = useRef(null)
+  const iframeRef   = useRef(null)
   const apiRef      = useRef(null)
   const intervalRef = useRef(null)
   const pollRef     = useRef(null)
 
-  const [session,    setSession]    = useState(null)
-  const [phase,      setPhase]      = useState('waiting')
-  const [seconds,    setSeconds]    = useState(0)
-  const [credits,    setCredits]    = useState(user?.credits ?? 120)
-  const [jitsiReady, setJitsiReady] = useState(true)
-  const [rating,     setRating]     = useState(0)
-  const [loadError,  setLoadError]  = useState('')
-  const [joining,    setJoining]    = useState(false)
+  const [session,   setSession]   = useState(null)
+  const [phase,     setPhase]     = useState('waiting')
+  const [seconds,   setSeconds]   = useState(0)
+  const [credits,   setCredits]   = useState(user?.credits ?? 120)
+  const [rating,    setRating]    = useState(0)
+  const [loadError, setLoadError] = useState('')
+  const [joining,   setJoining]   = useState(false)
 
   const loadSession = async () => {
     try {
       const res = await api.get(`/sessions/${id}`)
-      const s   = res.data.session ?? res.data
+      const s = res.data.session ?? res.data
       return {
         id:          s.id,
         title:       s.title ?? 'Session',
@@ -48,7 +47,7 @@ export default function SessionRoom() {
     loadSession().then(s => { if (s) setSession(s) })
   }, [id, user?.id])
 
-  // Learner : polling pour rejoindre auto quand teacher démarre
+  // Learner : rejoindre auto quand teacher démarre
   useEffect(() => {
     if (!session || phase !== 'waiting' || session.myRole === 'teacher') return
     pollRef.current = setInterval(async () => {
@@ -72,7 +71,6 @@ export default function SessionRoom() {
 
   useEffect(() => {
     return () => {
-      if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
       clearInterval(intervalRef.current)
       clearInterval(pollRef.current)
     }
@@ -84,10 +82,11 @@ export default function SessionRoom() {
   const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
 
   const launchJitsi = (roomName) => {
-    if (!jitsiRef.current) return
-    if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
+    if (!iframeRef.current) return
 
-    const displayName = encodeURIComponent(`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim())
+    const displayName = encodeURIComponent(
+      `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
+    )
 
     const params = [
       'config.prejoinPageEnabled=false',
@@ -104,24 +103,8 @@ export default function SessionRoom() {
       `userInfo.displayName=${displayName}`,
     ].join('&')
 
-    const src = `https://meet.jit.si/${roomName}#${params}`
-
-    const iframe = document.createElement('iframe')
-    iframe.src              = src
-    iframe.allow            = 'camera; microphone; display-capture; autoplay; clipboard-write'
-    iframe.style.width      = '100%'
-    iframe.style.height     = '100%'
-    iframe.style.border     = 'none'
-    iframe.style.background = '#1A1410'
-
-    jitsiRef.current.innerHTML = ''
-    jitsiRef.current.appendChild(iframe)
-
-    apiRef.current = { dispose: () => { iframe.src = 'about:blank'; iframe.remove() } }
-
-    iframe.addEventListener('load', () => {
-      setTimeout(() => setPhase('active'), 1000)
-    })
+    iframeRef.current.src = `https://meet.jit.si/${roomName}#${params}`
+    setTimeout(() => setPhase('active'), 2000)
   }
 
   const startJitsi = async () => {
@@ -139,7 +122,7 @@ export default function SessionRoom() {
   }
 
   const handleEndSession = async () => {
-    if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
+    if (iframeRef.current) iframeRef.current.src = 'about:blank'
     clearInterval(intervalRef.current)
     clearInterval(pollRef.current)
     try {
@@ -172,7 +155,8 @@ export default function SessionRoom() {
 
       {/* Topbar */}
       <div className="bg-[#1E2035] border-b border-white/[0.07] px-6 py-3 flex items-center gap-4 flex-shrink-0">
-        <button onClick={() => { if (phase === 'active') handleEndSession(); else navigate('/sessions') }}
+        <button
+          onClick={() => { if (phase === 'active') handleEndSession(); else navigate('/sessions') }}
           className="text-white/50 hover:text-white bg-transparent border-none cursor-pointer transition-all">
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
             <path d="M11 3L6 9l5 6"/>
@@ -199,11 +183,23 @@ export default function SessionRoom() {
 
       {/* Zone principale */}
       <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 relative" ref={jitsiRef}>
 
-          {/* Waiting */}
+        {/* Zone vidéo */}
+        <div className="flex-1 relative bg-[#1A1410]">
+
+          {/* iframe Jitsi — toujours monté, caché en phase waiting/ended */}
+          <iframe
+            ref={iframeRef}
+            src="about:blank"
+            allow="camera; microphone; display-capture; autoplay; clipboard-write"
+            title="Jitsi Meet"
+            className="absolute inset-0 w-full h-full border-0"
+            style={{ display: phase === 'active' ? 'block' : 'none' }}
+          />
+
+          {/* Écran d'attente */}
           {phase === 'waiting' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 z-10 bg-[#1A1410]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
               <div className="w-20 h-20 rounded-full bg-white/[0.06] flex items-center justify-center">
                 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
                   <rect x="3" y="7" width="22" height="22" rx="4"/>
@@ -219,12 +215,12 @@ export default function SessionRoom() {
                   {session.duration} crédits réservés · {isTeacher ? 'Vous allez gagner des crédits' : 'Crédits réservés'}
                 </p>
               </div>
-
               {isTeacher ? (
                 <button onClick={startJitsi} disabled={joining}
                   className="px-8 py-4 rounded-2xl bg-[#3D5C28] text-white text-[15px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all disabled:opacity-40 flex items-center gap-3">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <rect x="2" y="5" width="13" height="13" rx="3"/><path d="M15 8l5-3v10l-5-3"/>
+                    <rect x="2" y="5" width="13" height="13" rx="3"/>
+                    <path d="M15 8l5-3v10l-5-3"/>
                   </svg>
                   {joining ? 'Connexion…' : 'Démarrer la session'}
                 </button>
@@ -243,9 +239,9 @@ export default function SessionRoom() {
             </div>
           )}
 
-          {/* Ended */}
+          {/* Écran de fin */}
           {phase === 'ended' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 z-10 bg-[#1A1410]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
               <div className="w-16 h-16 rounded-full bg-[#3D5C28]/30 flex items-center justify-center">
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#86C46E" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M5 14l6 6L23 8"/>
@@ -261,7 +257,7 @@ export default function SessionRoom() {
                 <div className="text-center">
                   <p className="text-white/60 text-[13px] mb-3">Évaluer cette session</p>
                   <div className="flex gap-2">
-                    {[1,2,3,4,5].map(s => (
+                    {[1, 2, 3, 4, 5].map(s => (
                       <button key={s} onClick={() => setRating(s)}
                         className={`w-11 h-11 rounded-xl text-[16px] font-bold cursor-pointer transition-all border-none
                           ${s <= rating ? 'bg-[#252840] text-white' : 'bg-white/[0.08] text-white/40 hover:bg-white/20 hover:text-white'}`}>
@@ -285,7 +281,7 @@ export default function SessionRoom() {
           )}
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar session active */}
         {phase === 'active' && (
           <div className="w-[220px] bg-[#1E2035] border-l border-white/[0.07] flex flex-col p-5 gap-4 flex-shrink-0">
             <h3 className="text-white font-bold text-[13px]">Session info</h3>
@@ -308,6 +304,7 @@ export default function SessionRoom() {
             </button>
           </div>
         )}
+
       </div>
     </main>
   )
