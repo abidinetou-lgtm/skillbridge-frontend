@@ -24,21 +24,19 @@ export default function SessionRoom() {
   const [loadError,  setLoadError]  = useState('')
   const [joining,    setJoining]    = useState(false)
 
-  // ── Charger la session ────────────────────────────────────────────────
   const loadSession = async () => {
     try {
       const res = await api.get(`/sessions/${id}`)
       const s   = res.data.session ?? res.data
       return {
-        id:            s.id,
-        title:         s.title ?? 'Session',
-        creditsPerMin: 1,
-        duration:      s.creditsReserved ?? 60,
-        myRole:        s.teacher?.id === user?.id ? 'teacher' : 'learner',
-        teacherName:   `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
-        studentName:   `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
-        jitsiRoomId:   s.jitsiRoomId,
-        status:        s.status,
+        id:          s.id,
+        title:       s.title ?? 'Session',
+        duration:    s.creditsReserved ?? 60,
+        myRole:      s.teacher?.id === user?.id ? 'teacher' : 'learner',
+        teacherName: `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
+        studentName: `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
+        jitsiRoomId: s.jitsiRoomId,
+        status:      s.status,
       }
     } catch {
       setLoadError('Session introuvable ou accès refusé.')
@@ -50,34 +48,29 @@ export default function SessionRoom() {
     loadSession().then(s => { if (s) setSession(s) })
   }, [id, user?.id])
 
-  // ── Charger Jitsi ────────────────────────────────────────────────────
   useEffect(() => {
     if (window.JitsiMeetExternalAPI) { setJitsiReady(true); return }
-    const script    = document.createElement('script')
-    script.src      = 'https://meet.jit.si/external_api.js'
-    script.async    = true
-    script.onload   = () => setJitsiReady(true)
-    script.onerror  = () => console.error('Failed to load Jitsi')
+    const script   = document.createElement('script')
+    script.src     = 'https://meet.jit.si/external_api.js'
+    script.async   = true
+    script.onload  = () => setJitsiReady(true)
+    script.onerror = () => console.error('Failed to load Jitsi')
     document.head.appendChild(script)
   }, [])
 
-  // ── Polling : si learner et session devient ACTIVE → rejoindre auto ──
+  // Learner : polling pour rejoindre auto quand teacher démarre
   useEffect(() => {
-    if (!session || phase !== 'waiting') return
-    if (session.myRole === 'teacher') return // teacher lance lui-même
-
+    if (!session || phase !== 'waiting' || session.myRole === 'teacher') return
     pollRef.current = setInterval(async () => {
       const s = await loadSession()
-      if (s?.status === 'ACTIVE' && phase === 'waiting') {
+      if (s?.status === 'ACTIVE') {
         clearInterval(pollRef.current)
-        startJitsiWithRoom(s.jitsiRoomId)
+        launchJitsi(s.jitsiRoomId)
       }
     }, 2000)
-
     return () => clearInterval(pollRef.current)
-  }, [session, phase])
+  }, [session?.id, phase])
 
-  // ── Timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase === 'active') {
       intervalRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
@@ -87,7 +80,6 @@ export default function SessionRoom() {
     return () => clearInterval(intervalRef.current)
   }, [phase])
 
-  // ── Cleanup ───────────────────────────────────────────────────────────
   useEffect(() => {
     return () => {
       if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
@@ -97,13 +89,12 @@ export default function SessionRoom() {
   }, [])
 
   const isTeacher   = session?.myRole === 'teacher'
-  const cost        = Math.ceil(seconds / 60) * (session?.creditsPerMin ?? 1)
+  const cost        = Math.ceil(seconds / 60)
   const creditDelta = isTeacher ? `+${cost}` : `-${cost}`
   const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
 
-  // ── Lancer Jitsi avec un roomName donné ───────────────────────────────
-  const startJitsiWithRoom = (roomName) => {
-    if (!jitsiReady || !jitsiRef.current) return
+  const launchJitsi = (roomName) => {
+    if (!window.JitsiMeetExternalAPI || !jitsiRef.current) return
     if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
 
     apiRef.current = new window.JitsiMeetExternalAPI('meet.jit.si', {
@@ -111,56 +102,73 @@ export default function SessionRoom() {
       parentNode: jitsiRef.current,
       width:  '100%',
       height: '100%',
-      userInfo: { displayName: user?.firstName ?? 'User', email: user?.email ?? '' },
+      userInfo: {
+        displayName: `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim(),
+        email: user?.email ?? '',
+      },
       configOverwrite: {
-        startWithAudioMuted: false,
-        startWithVideoMuted: false,
-        prejoinPageEnabled:  false,
-        disableDeepLinking:  true,
+        prejoinPageEnabled:         false,  // désactive la page pré-join Jitsi
+        startWithAudioMuted:        false,
+        startWithVideoMuted:        false,
+        disableDeepLinking:         true,
+        disableInviteFunctions:     true,
+        enableWelcomePage:          false,
         toolbarButtons: [
-          'microphone', 'camera', 'chat', 'desktop',
-          'hangup', 'participants-pane', 'tileview', 'fullscreen',
+          'microphone', 'camera', 'chat',
+          'hangup', 'tileview', 'fullscreen',
         ],
       },
       interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK:      false,
-        SHOW_WATERMARK_FOR_GUESTS: false,
-        DEFAULT_BACKGROUND:        '#1A1410',
-        TOOLBAR_ALWAYS_VISIBLE:    true,
+        SHOW_JITSI_WATERMARK:        false,
+        SHOW_WATERMARK_FOR_GUESTS:   false,
+        SHOW_BRAND_WATERMARK:        false,
+        DEFAULT_BACKGROUND:          '#1A1410',
+        TOOLBAR_ALWAYS_VISIBLE:      true,
+        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+        // Cache la page prejoin même si le serveur la force
+        HIDE_INVITE_MORE_HEADER:     true,
       },
     })
 
-    apiRef.current.addEventListener('videoConferenceJoined', () => setPhase('active'))
-    apiRef.current.addEventListener('videoConferenceLeft',   () => handleEndSession())
+    // Supprimer la page prejoin si elle apparaît quand même
+    const removePrejoin = setInterval(() => {
+      const prejoin = jitsiRef.current?.querySelector('[data-testid="prejoin-screen"]')
+        || jitsiRef.current?.querySelector('.premeeting-screen')
+        || jitsiRef.current?.querySelector('#lobby-screen')
+      if (prejoin) prejoin.style.display = 'none'
+    }, 300)
+
+    apiRef.current.addEventListener('videoConferenceJoined', () => {
+      clearInterval(removePrejoin)
+      setPhase('active')
+    })
+    apiRef.current.addEventListener('videoConferenceLeft', () => {
+      clearInterval(removePrejoin)
+      handleEndSession()
+    })
   }
 
-  // ── Start (teacher) ───────────────────────────────────────────────────
   const startJitsi = async () => {
-    if (!jitsiReady || !jitsiRef.current || !session || joining) return
+    if (!jitsiReady || !session || joining) return
     setJoining(true)
-
-    let roomName = session.jitsiRoomId ?? `skillbridge-session-${id}`
+    let roomName = session.jitsiRoomId ?? `skillbridge-${id}`
     try {
       const res = await api.post(`/sessions/${id}/join`)
       if (res.data.jitsiRoomId) roomName = res.data.jitsiRoomId
     } catch (e) {
       console.warn('join error:', e)
     }
-
-    startJitsiWithRoom(roomName)
+    launchJitsi(roomName)
     setJoining(false)
   }
 
-  // ── End ───────────────────────────────────────────────────────────────
   const handleEndSession = async () => {
     if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
     clearInterval(intervalRef.current)
     clearInterval(pollRef.current)
     try {
       await api.post(`/sessions/${id}/end`, { durationSeconds: seconds })
-    } catch (e) {
-      console.warn('end error:', e)
-    }
+    } catch (e) { console.warn('end error:', e) }
     setPhase('ended')
   }
 
@@ -168,7 +176,7 @@ export default function SessionRoom() {
     <main className="pt-[62px] min-h-screen bg-[#1A1410] flex flex-col items-center justify-center gap-4">
       <p className="text-white/60 text-[16px]">{loadError}</p>
       <button onClick={() => navigate('/sessions')}
-        className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+        className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer">
         Retour aux sessions
       </button>
     </main>
@@ -194,22 +202,19 @@ export default function SessionRoom() {
             <path d="M11 3L6 9l5 6"/>
           </svg>
         </button>
-
         <div className="flex-1 min-w-0">
           <div className="text-white font-bold text-[14px] truncate">{session.title}</div>
           <div className="text-white/40 text-[11px]">
             {isTeacher ? 'Donneur' : 'Receveur'} · {isTeacher ? session.studentName : session.teacherName}
           </div>
         </div>
-
         {phase === 'active' && (
           <div className="flex items-center gap-3 bg-white/[0.06] px-4 py-2 rounded-full">
             <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
             <span className="text-white font-black text-[18px] tabular-nums">{fmt(seconds)}</span>
-            <span className={`text-[13px] font-bold tabular-nums ${deltaColor}`}>{creditDelta} cr</span>
+            <span className={`text-[13px] font-bold ${deltaColor}`}>{creditDelta} cr</span>
           </div>
         )}
-
         <div className="bg-white/[0.06] px-4 py-2 rounded-full">
           <span className="text-white/60 text-[11px]">Balance: </span>
           <span className="text-white font-bold text-[13px]">{Math.floor(credits)} cr</span>
@@ -222,14 +227,13 @@ export default function SessionRoom() {
 
           {/* Waiting */}
           {phase === 'waiting' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 z-10 bg-[#1A1410]">
               <div className="w-20 h-20 rounded-full bg-white/[0.06] flex items-center justify-center">
                 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
                   <rect x="3" y="7" width="22" height="22" rx="4"/>
                   <path d="M25 14l8-5v18l-8-5"/>
                 </svg>
               </div>
-
               <div className="text-center">
                 <p className="text-white font-bold text-[20px] mb-2">{session.title}</p>
                 <p className="text-white/50 text-[14px] mb-1">
@@ -246,7 +250,7 @@ export default function SessionRoom() {
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <rect x="2" y="5" width="13" height="13" rx="3"/><path d="M15 8l5-3v10l-5-3"/>
                   </svg>
-                  {joining ? 'Connexion…' : jitsiReady ? 'Démarrer la session' : 'Chargement Jitsi…'}
+                  {joining ? 'Connexion…' : jitsiReady ? 'Démarrer la session' : 'Chargement…'}
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-3">
@@ -265,7 +269,7 @@ export default function SessionRoom() {
 
           {/* Ended */}
           {phase === 'ended' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 z-10 bg-[#1A1410]">
               <div className="w-16 h-16 rounded-full bg-[#3D5C28]/30 flex items-center justify-center">
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#86C46E" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M5 14l6 6L23 8"/>
@@ -277,7 +281,6 @@ export default function SessionRoom() {
                   Durée : {fmt(seconds)} · <span className={deltaColor}>{isTeacher ? `+${cost} crédits gagnés` : `${cost} crédits dépensés`}</span>
                 </p>
               </div>
-
               {!isTeacher && (
                 <div className="text-center">
                   <p className="text-white/60 text-[13px] mb-3">Évaluer cette session</p>
@@ -292,7 +295,6 @@ export default function SessionRoom() {
                   </div>
                 </div>
               )}
-
               <div className="flex gap-3">
                 <button onClick={() => navigate('/sessions')}
                   className="px-6 py-3 rounded-xl border-[1.5px] border-white/20 text-white text-[13px] font-semibold bg-transparent cursor-pointer hover:border-white transition-all">
@@ -307,26 +309,22 @@ export default function SessionRoom() {
           )}
         </div>
 
-        {/* Sidebar active */}
+        {/* Sidebar */}
         {phase === 'active' && (
-          <div className="w-[240px] bg-[#1E2035] border-l border-white/[0.07] flex flex-col p-5 gap-4 flex-shrink-0">
+          <div className="w-[220px] bg-[#1E2035] border-l border-white/[0.07] flex flex-col p-5 gap-4 flex-shrink-0">
             <h3 className="text-white font-bold text-[13px]">Session info</h3>
-            <div className="flex flex-col gap-0">
+            <div className="flex flex-col">
               {[
-                { label: 'Durée',     value: fmt(seconds) },
-                { label: 'Crédits',   value: `${creditDelta} (${Math.floor(credits)} restants)` },
-                { label: 'Rôle',      value: isTeacher ? 'Donneur' : 'Receveur' },
-                { label: 'Réservés',  value: `${session.duration} cr` },
+                { label: 'Durée',    value: fmt(seconds) },
+                { label: 'Crédits', value: `${creditDelta} (${Math.floor(credits)} restants)` },
+                { label: 'Rôle',    value: isTeacher ? 'Donneur' : 'Receveur' },
+                { label: 'Réservés',value: `${session.duration} cr` },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center py-[10px] border-b border-white/[0.06] last:border-0">
                   <span className="text-white/40 text-[11px]">{row.label}</span>
                   <span className="text-white text-[12px] font-semibold">{row.value}</span>
                 </div>
               ))}
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <div className="w-2 h-2 rounded-full bg-[#3D5C28]" />
-              <span className="text-white/50 text-[11px]">Jitsi connecté</span>
             </div>
             <button onClick={handleEndSession}
               className="mt-auto w-full py-3 rounded-xl bg-red-500 text-white text-[13px] font-bold border-none cursor-pointer hover:bg-red-600 transition-all">
