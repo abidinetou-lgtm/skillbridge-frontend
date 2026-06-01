@@ -48,15 +48,7 @@ export default function SessionRoom() {
     loadSession().then(s => { if (s) setSession(s) })
   }, [id, user?.id])
 
-  useEffect(() => {
-    if (window.JitsiMeetExternalAPI) { setJitsiReady(true); return }
-    const script   = document.createElement('script')
-    script.src     = 'https://8x8.vc/external_api.js'
-    script.async   = true
-    script.onload  = () => setJitsiReady(true)
-    script.onerror = () => console.error('Failed to load Jitsi')
-    document.head.appendChild(script)
-  }, [])
+  useEffect(() => { setJitsiReady(true) }, [])
 
   // Learner : polling pour rejoindre auto quand teacher démarre
   useEffect(() => {
@@ -93,61 +85,50 @@ export default function SessionRoom() {
   const creditDelta = isTeacher ? `+${cost}` : `-${cost}`
   const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
 
-  const launchJitsi = (roomName) => {
-    if (!window.JitsiMeetExternalAPI || !jitsiRef.current) return
-    if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+    const launchJitsi = (roomName) => {
+    if (!jitsiRef.current) return
+    if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
 
-    apiRef.current = new window.JitsiMeetExternalAPI('8x8.vc', {
-      roomName,
-      parentNode: jitsiRef.current,
-      width:  '100%',
-      height: '100%',
-      userInfo: {
-        displayName: `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim(),
-        email: user?.email ?? '',
-      },
-      configOverwrite: {
-        prejoinPageEnabled:         false,
-        startWithAudioMuted:        false,
-        startWithVideoMuted:        false,
-        disableDeepLinking:         true,
-        disableInviteFunctions:     true,
-        enableWelcomePage:          false,
-        enableLobbyChat:            false,
-        requireDisplayName:         false,
-        toolbarButtons: [
-          'microphone', 'camera', 'chat',
-          'hangup', 'tileview', 'fullscreen',
-        ],
-      },
-      interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK:        false,
-        SHOW_WATERMARK_FOR_GUESTS:   false,
-        SHOW_BRAND_WATERMARK:        false,
-        DEFAULT_BACKGROUND:          '#1A1410',
-        TOOLBAR_ALWAYS_VISIBLE:      true,
-        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-        // Cache la page prejoin même si le serveur la force
-        HIDE_INVITE_MORE_HEADER:     true,
-      },
-    })
+    const displayName = encodeURIComponent(`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim())
 
-    // Supprimer la page prejoin si elle apparaît quand même
-    const removePrejoin = setInterval(() => {
-      const prejoin = jitsiRef.current?.querySelector('[data-testid="prejoin-screen"]')
-        || jitsiRef.current?.querySelector('.premeeting-screen')
-        || jitsiRef.current?.querySelector('#lobby-screen')
-      if (prejoin) prejoin.style.display = 'none'
-    }, 300)
+    // Paramètres passés directement dans l'URL pour bypasser la page prejoin
+    const params = [
+      'config.prejoinPageEnabled=false',
+      'config.startWithAudioMuted=false',
+      'config.startWithVideoMuted=false',
+      'config.disableDeepLinking=true',
+      'config.enableWelcomePage=false',
+      'config.enableLobbyChat=false',
+      'config.requireDisplayName=false',
+      'config.disableInviteFunctions=true',
+      'interfaceConfig.SHOW_JITSI_WATERMARK=false',
+      'interfaceConfig.TOOLBAR_ALWAYS_VISIBLE=true',
+      'interfaceConfig.DISABLE_JOIN_LEAVE_NOTIFICATIONS=true',
+      `userInfo.displayName=${displayName}`,
+    ].join('&')
 
-    apiRef.current.addEventListener('videoConferenceJoined', () => {
-      clearInterval(removePrejoin)
-      setPhase('active')
+    const src = `https://meet.jit.si/${roomName}#${params}`
+
+    // Créer un iframe directement — bypasse complètement la page pré-join
+    const iframe = document.createElement('iframe')
+    iframe.src              = src
+    iframe.allow            = 'camera; microphone; display-capture; autoplay; clipboard-write'
+    iframe.style.width      = '100%'
+    iframe.style.height     = '100%'
+    iframe.style.border     = 'none'
+    iframe.style.background = '#1A1410'
+
+    jitsiRef.current.innerHTML = ''
+    jitsiRef.current.appendChild(iframe)
+
+    // Stocker une ref pour pouvoir "disposer"
+    apiRef.current = { dispose: () => { iframe.src = 'about:blank'; iframe.remove() } }
+
+    // Passer en phase active dès que l'iframe charge
+    iframe.addEventListener('load', () => {
+      setTimeout(() => setPhase('active'), 1000)
     })
-    apiRef.current.addEventListener('videoConferenceLeft', () => {
-      clearInterval(removePrejoin)
-      handleEndSession()
-    })
+  }
   }
 
   const startJitsi = async () => {
@@ -337,4 +318,3 @@ export default function SessionRoom() {
       </div>
     </main>
   )
-}
