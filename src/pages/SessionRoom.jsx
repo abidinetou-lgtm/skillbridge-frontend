@@ -19,7 +19,7 @@ export default function SessionRoom() {
   const [phase,      setPhase]      = useState('waiting')
   const [seconds,    setSeconds]    = useState(0)
   const [credits,    setCredits]    = useState(user?.credits ?? 120)
-  const [jitsiReady, setJitsiReady] = useState(false)
+  const [jitsiReady, setJitsiReady] = useState(true)
   const [rating,     setRating]     = useState(0)
   const [loadError,  setLoadError]  = useState('')
   const [joining,    setJoining]    = useState(false)
@@ -48,8 +48,6 @@ export default function SessionRoom() {
     loadSession().then(s => { if (s) setSession(s) })
   }, [id, user?.id])
 
-  useEffect(() => { setJitsiReady(true) }, [])
-
   // Learner : polling pour rejoindre auto quand teacher démarre
   useEffect(() => {
     if (!session || phase !== 'waiting' || session.myRole === 'teacher') return
@@ -74,7 +72,7 @@ export default function SessionRoom() {
 
   useEffect(() => {
     return () => {
-      if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+      if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
       clearInterval(intervalRef.current)
       clearInterval(pollRef.current)
     }
@@ -85,13 +83,12 @@ export default function SessionRoom() {
   const creditDelta = isTeacher ? `+${cost}` : `-${cost}`
   const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
 
-    const launchJitsi = (roomName) => {
+  const launchJitsi = (roomName) => {
     if (!jitsiRef.current) return
     if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
 
     const displayName = encodeURIComponent(`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim())
 
-    // Paramètres passés directement dans l'URL pour bypasser la page prejoin
     const params = [
       'config.prejoinPageEnabled=false',
       'config.startWithAudioMuted=false',
@@ -109,7 +106,6 @@ export default function SessionRoom() {
 
     const src = `https://meet.jit.si/${roomName}#${params}`
 
-    // Créer un iframe directement — bypasse complètement la page pré-join
     const iframe = document.createElement('iframe')
     iframe.src              = src
     iframe.allow            = 'camera; microphone; display-capture; autoplay; clipboard-write'
@@ -121,18 +117,15 @@ export default function SessionRoom() {
     jitsiRef.current.innerHTML = ''
     jitsiRef.current.appendChild(iframe)
 
-    // Stocker une ref pour pouvoir "disposer"
     apiRef.current = { dispose: () => { iframe.src = 'about:blank'; iframe.remove() } }
 
-    // Passer en phase active dès que l'iframe charge
     iframe.addEventListener('load', () => {
       setTimeout(() => setPhase('active'), 1000)
     })
   }
-  }
 
   const startJitsi = async () => {
-    if (!jitsiReady || !session || joining) return
+    if (!session || joining) return
     setJoining(true)
     let roomName = session.jitsiRoomId ?? `skillbridge-${id}`
     try {
@@ -146,7 +139,7 @@ export default function SessionRoom() {
   }
 
   const handleEndSession = async () => {
-    if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
+    if (apiRef.current) { apiRef.current.dispose?.(); apiRef.current = null }
     clearInterval(intervalRef.current)
     clearInterval(pollRef.current)
     try {
@@ -228,12 +221,12 @@ export default function SessionRoom() {
               </div>
 
               {isTeacher ? (
-                <button onClick={startJitsi} disabled={!jitsiReady || joining}
+                <button onClick={startJitsi} disabled={joining}
                   className="px-8 py-4 rounded-2xl bg-[#3D5C28] text-white text-[15px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all disabled:opacity-40 flex items-center gap-3">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <rect x="2" y="5" width="13" height="13" rx="3"/><path d="M15 8l5-3v10l-5-3"/>
                   </svg>
-                  {joining ? 'Connexion…' : jitsiReady ? 'Démarrer la session' : 'Chargement…'}
+                  {joining ? 'Connexion…' : 'Démarrer la session'}
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-3">
@@ -241,7 +234,7 @@ export default function SessionRoom() {
                     <div className="w-2 h-2 rounded-full bg-[#C8864B] animate-pulse" />
                     <span className="text-white/70 text-[13px]">En attente que le donneur démarre…</span>
                   </div>
-                  <button onClick={startJitsi} disabled={!jitsiReady || joining}
+                  <button onClick={startJitsi} disabled={joining}
                     className="px-6 py-3 rounded-xl border-[1.5px] border-white/20 text-white text-[13px] font-semibold bg-transparent cursor-pointer hover:border-white transition-all disabled:opacity-40">
                     {joining ? 'Connexion…' : 'Rejoindre maintenant'}
                   </button>
@@ -318,3 +311,4 @@ export default function SessionRoom() {
       </div>
     </main>
   )
+}
