@@ -51,7 +51,7 @@ export default function SessionRoom() {
   useEffect(() => {
     if (window.JitsiMeetExternalAPI) { setJitsiReady(true); return }
     const script   = document.createElement('script')
-    script.src     = 'https://meet.jit.si/external_api.js'
+    script.src     = 'https://8x8.vc/external_api.js'
     script.async   = true
     script.onload  = () => setJitsiReady(true)
     script.onerror = () => console.error('Failed to load Jitsi')
@@ -97,7 +97,7 @@ export default function SessionRoom() {
     if (!window.JitsiMeetExternalAPI || !jitsiRef.current) return
     if (apiRef.current) { apiRef.current.dispose(); apiRef.current = null }
 
-    apiRef.current = new window.JitsiMeetExternalAPI('meet.jit.si', {
+    apiRef.current = new window.JitsiMeetExternalAPI('8x8.vc', {
       roomName,
       parentNode: jitsiRef.current,
       width:  '100%',
@@ -107,12 +107,14 @@ export default function SessionRoom() {
         email: user?.email ?? '',
       },
       configOverwrite: {
-        prejoinPageEnabled:         false,  // désactive la page pré-join Jitsi
+        prejoinPageEnabled:         false,
         startWithAudioMuted:        false,
         startWithVideoMuted:        false,
         disableDeepLinking:         true,
         disableInviteFunctions:     true,
         enableWelcomePage:          false,
+        enableLobbyChat:            false,
+        requireDisplayName:         false,
         toolbarButtons: [
           'microphone', 'camera', 'chat',
           'hangup', 'tileview', 'fullscreen',
