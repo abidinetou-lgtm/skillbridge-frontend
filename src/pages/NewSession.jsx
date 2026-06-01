@@ -155,47 +155,14 @@ export default function NewSession() {
             </div>
           </div>
 
-          {/* Group session toggle */}
-          <div className="flex items-start gap-4 bg-[#F8F8F8] rounded-xl px-5 py-4 border border-black/[0.07]">
-            <input
-              type="checkbox"
-              id="isOpen"
-              checked={form.isOpen}
-              onChange={e => set('isOpen', e.target.checked)}
-              className="mt-[2px] w-4 h-4 accent-[#252840] cursor-pointer"
-            />
-            <div className="flex-1">
-              <label htmlFor="isOpen" className="text-[13px] font-bold text-[#1A1410] cursor-pointer">
-                Session ouverte à plusieurs receveurs
-              </label>
-              <p className="text-[12px] text-[#7A6E5C] mt-[2px]">
-                Les crédits sont divisés entre les participants.
-              </p>
-              {form.isOpen && (
-                <div className="mt-3">
-                  <label className={labelClass}>Nombre max de participants</label>
-                  <select
-                    className={`${inputClass} w-[160px]`}
-                    value={form.maxParticipants}
-                    onChange={e => set('maxParticipants', Number(e.target.value))}
-                  >
-                    {[2,3,4,5,6,8,10].map(n => <option key={n} value={n}>{n} participants</option>)}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
+
 
           <div className="bg-[#ECEEF8] rounded-xl px-5 py-4">
             <p className="text-[13px] font-bold text-[#252840] mb-1">Estimation du coût</p>
             <p className="text-[12px] text-[#7A6E5C]">
               Total: <strong className="text-[#252840]">{form.duration * form.creditsPerMin} crédits</strong>
               &nbsp;({form.duration} min × {form.creditsPerMin} crédit/min)
-              {form.isOpen && (
-                <span className="ml-2 text-[#C8864B]">
-                  · {Math.ceil((form.duration * form.creditsPerMin) / form.maxParticipants)} cr/participant
-                </span>
-              )}
+  
             </p>
           </div>
 
