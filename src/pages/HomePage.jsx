@@ -218,7 +218,7 @@ function MatchCards() {
         return (
           <div
             key={match.id}
-            style={{ ...style, position: 'absolute', left: '50%', width: '580px', maxWidth: '90vw' }}
+            style={{ ...style, position: 'absolute', left: '50%', width: '580px', maxWidth: 'calc(100vw - 24px)' }}
             className="bg-[#FDFAF4] border border-black/[0.09] rounded-[20px] px-9 py-8 flex items-center gap-6"
           >
             {/* Avatar */}
@@ -360,12 +360,12 @@ export default function HomePage() {
   return (
     <main>
       {/* ── HERO ── */}
-      <section className="pt-[62px] min-h-screen grid grid-cols-2 overflow-hidden">
+      <section className="pt-[62px] min-h-screen flex flex-col md:grid md:grid-cols-2 overflow-hidden">
  
         {/* Gauche — texte */}
-        <div className="px-20 py-[72px] flex flex-col justify-center gap-9">
+        <div className="px-6 md:px-20 py-12 md:py-[72px] flex flex-col justify-center gap-7 md:gap-9">
           {/* Titre 3D Inter 900 */}
-          <h1 className="font-black text-[clamp(52px,6.5vw,92px)] leading-[1.0] tracking-[-3px] text-[#1A1410] pb-[6px]">
+          <h1 className="font-black text-[clamp(36px,8vw,92px)] leading-[1.0] tracking-[-2px] md:tracking-[-3px] text-[#1A1410] pb-[6px]">
             <span className="block">
               Teach<span className="inline-block w-[0.22em]" />
               <span className="text-[#C8864B]">what</span>
@@ -407,14 +407,14 @@ export default function HomePage() {
           </div>
         </div>
  
-        {/* Droite — carousel */}
-        <div className="relative overflow-hidden bg-[#FAF5E8]">
+        {/* Droite — carousel (caché sur mobile) */}
+        <div className="hidden md:block relative overflow-hidden bg-[#FAF5E8]">
           <HeroCarousel />
         </div>
       </section>
  
       {/* ── HOW IT WORKS ── */}
-      <section className="bg-[#1A1410] px-20 py-20" id="how">
+      <section className="bg-[#1A1410] px-6 md:px-20 py-12 md:py-20" id="how">
         <p className="text-[11px] font-bold tracking-[1.5px] uppercase text-[#C8864B] mb-3">How it works</p>
         <h2 className="text-[38px] font-black tracking-[-1.5px] text-white leading-[1.05] mb-14">
           Four steps to your<br/>first skill exchange.
@@ -445,9 +445,9 @@ export default function HomePage() {
           ].map((step) => (
             <div
               key={step.num}
-              className={`grid grid-cols-2 overflow-hidden ${step.right ? '[direction:rtl]' : ''}`}
+              className={`grid grid-cols-1 md:grid-cols-2 overflow-hidden ${step.right ? 'md:[direction:rtl]' : ''}`}
             >
-              <div className={`relative min-h-[320px] flex items-center justify-center bg-white/[0.03] overflow-hidden ${step.right ? '[direction:ltr]' : ''}`}>
+              <div className={`hidden md:flex relative min-h-[320px] items-center justify-center bg-white/[0.03] overflow-hidden ${step.right ? '[direction:ltr]' : ''}`}>
                 <span className="absolute top-5 left-5 text-[11px] font-bold tracking-[1px] uppercase text-white/35 bg-white/[0.06] px-[10px] py-1 rounded-full">
                   Step {step.num}
                 </span>
@@ -464,7 +464,7 @@ export default function HomePage() {
       </section>
  
       {/* ── YOUR MATCHES TODAY ── */}
-      <section className="px-20 py-[72px]" id="matches">
+      <section className="px-6 md:px-20 py-12 md:py-[72px]" id="matches">
         <div className="flex items-end justify-between gap-5 mb-9">
           <div>
             <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Suggested for you</p>
@@ -484,10 +484,10 @@ export default function HomePage() {
         <MatchCards />
       </section>
  
-      <div className="h-px bg-black/[0.09] mx-20" />
+      <div className="h-px bg-black/[0.09] mx-6 md:mx-20" />
  
       {/* ── WHAT MEMBERS SHARE ── */}
-      <section className="px-20 py-[72px]" id="feed">
+      <section className="px-6 md:px-20 py-12 md:py-[72px]" id="feed">
         <div className="flex items-end justify-between gap-5 mb-9">
           <div>
             <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Community</p>
