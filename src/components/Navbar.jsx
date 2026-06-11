@@ -1,148 +1,225 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
+import CreditIcon from './CreditIcon'
+
+const NAV_LINKS = [
+  { to: '/',           label: 'Accueil',    public: true  },
+  { to: '/connection', label: 'Connexions', public: true  },
+  { to: '/sessions',   label: 'Sessions',   public: false },
+  { to: '/chat',       label: 'Messages',   public: false },
+  { to: '/credits',    label: 'Crédits',    public: false },
+]
+
+function Avatar({ user }) {
+  const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`.toUpperCase() || 'U'
+  if (user?.avatarUrl) {
+    return (
+      <img
+        src={user.avatarUrl}
+        alt={user.firstName}
+        className="w-9 h-9 rounded-full object-cover border-2 border-[#C8864B]"
+      />
+    )
+  }
+  return (
+    <div className="w-9 h-9 rounded-full bg-[#252840] flex items-center justify-center text-xs font-bold text-[#F8F4EA] border-2 border-[#C8864B]">
+      {initials}
+    </div>
+  )
+}
 
 export default function Navbar() {
-  const [scrolled,   setScrolled]   = useState(false)
-  const [menuOpen,   setMenuOpen]   = useState(false)
+  const [menuOpen,      setMenuOpen]      = useState(false)
+  const [installPrompt, setInstallPrompt] = useState(null)
   const { user, openModal, logout } = useAuthStore()
   const location = useLocation()
   const navigate = useNavigate()
 
+  const visibleLinks = NAV_LINKS.filter(l => l.public || !!user)
+  const pathname = location.pathname
+
+  const isActive = (to) =>
+    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 80)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
-  // Fermer le menu au changement de page
-  useEffect(() => { setMenuOpen(false) }, [location.pathname])
-
-  const links = [
-    { to: '/',           label: 'Home',       public: true  },
-    { to: '/connection', label: 'Connection', public: true  },
-    { to: '/feed',       label: 'Feed',       public: true  },
-    { to: '/sessions',   label: 'Sessions',   public: false },
-    { to: '/chat',       label: 'Chat',       public: false },
-    { to: '/profile',    label: 'Profile',    public: false },
-  ]
-
-  const visibleLinks = links.filter(l => l.public || !!user)
+  const handleInstall = () => {
+    if (installPrompt) { installPrompt.prompt(); setInstallPrompt(null) }
+  }
 
   return (
     <>
-      <nav className={`
-        fixed z-50 flex items-center
-        bg-[rgba(248,244,234,0.96)] backdrop-blur-md
-        border border-black/[0.09]
-        transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
-        ${scrolled
-          ? 'top-[10px] left-1/2 -translate-x-1/2 right-auto w-[780px] max-w-[calc(100vw-16px)] h-[46px] px-4 rounded-full shadow-[0_4px_20px_rgba(26,20,16,0.10)]'
-          : 'top-0 left-0 right-0 h-[62px] px-4 md:px-16 rounded-none shadow-none'
-        }
-      `}>
+      <header className="sticky top-0 z-40 border-b border-[#E8DDC7] bg-[rgba(253,250,244,0.88)] backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
 
-        {/* Logo */}
-        <Link to="/" className="font-black text-[19px] tracking-tight flex-shrink-0 no-underline flex items-center leading-none">
-          <span className="text-[#252840]">Skill</span>
-          <span className="text-[#C8864B]">Bridge</span>
-        </Link>
+          {/* Logo */}
+          <Link to="/" className="flex-shrink-0 no-underline">
+            <img src="/skillbridge-logo.png" alt="SkillBridge" className="h-8 w-auto" />
+          </Link>
 
-        {/* Liens desktop */}
-        <div className="hidden md:flex items-center gap-[2px] mx-auto">
-          {visibleLinks.map(({ to, label }) => {
-            const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to))
-            return (
-              <Link key={to} to={to}
-                className={`
-                  px-3 py-[5px] rounded-lg font-medium no-underline
-                  transition-all duration-150 whitespace-nowrap leading-none
-                  ${scrolled ? 'text-[12px]' : 'text-[13px]'}
-                  ${isActive ? 'text-[#1A1410] font-bold' : 'text-[#7A6E5C] hover:text-[#1A1410] hover:bg-black/5'}
-                `}>
+          {/* Liens desktop */}
+          <nav className="hidden items-center gap-1 lg:flex">
+            {visibleLinks.map(({ to, label }) => (
+              <Link
+                key={to}
+                to={to}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors no-underline ${
+                  isActive(to)
+                    ? 'bg-[#252840] text-[#F8F4EA]'
+                    : 'text-[#756B5B] hover:bg-[#F8F4EA] hover:text-[#252840]'
+                }`}
+              >
                 {label}
               </Link>
-            )
-          })}
-        </div>
+            ))}
+          </nav>
 
-        {/* Auth desktop */}
-        <div className="hidden md:flex gap-2 items-center flex-shrink-0">
-          {user ? (
-            <div className="flex items-center gap-2">
-              <Link to="/profile"
-                className="w-8 h-8 rounded-full bg-[#252840] text-white text-xs font-bold flex items-center justify-center cursor-pointer no-underline hover:bg-[#363B6B] transition-all">
-                {user.firstName?.[0]?.toUpperCase() ?? 'U'}
+          {/* Actions desktop */}
+          <div className="hidden items-center gap-3 lg:flex">
+            {installPrompt && (
+              <button onClick={handleInstall}
+                className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-[#C8864B] text-white text-sm font-semibold border-none cursor-pointer hover:bg-[#B07030] transition-colors">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M8 2v8M5 7l3 3 3-3M2 12h12"/>
+                </svg>
+                Installer l'app
+              </button>
+            )}
+            {user ? (
+              <>
+                <Link
+                  to="/credits"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(61,92,40,0.1)] px-3 py-1.5 text-sm font-semibold text-[#3D5C28] no-underline"
+                >
+                  <CreditIcon size="sm" /> {user.credits ?? 0}
+                </Link>
+                <Link to="/profile" className="no-underline">
+                  <Avatar user={user} />
+                </Link>
+                <button
+                  onClick={() => { logout(); navigate('/') }}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-transparent border-none cursor-pointer text-[#756B5B] hover:bg-[#F8F4EA] hover:text-[#252840] transition-colors"
+                  aria-label="Se déconnecter"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="M10 3h3a1 1 0 011 1v8a1 1 0 01-1 1h-3M7 11l3-3-3-3M1 8h9"/>
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => openModal('login')}
+                  className="px-4 py-2 rounded-full border border-[#E8DDC7] text-sm font-semibold text-[#252840] bg-transparent cursor-pointer hover:border-[#252840] transition-colors"
+                >
+                  Se connecter
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="px-4 py-2 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors"
+                >
+                  S'inscrire
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Bouton hamburger mobile */}
+          <div className="flex items-center gap-2 lg:hidden">
+            {user && (
+              <Link to="/profile" className="no-underline">
+                <Avatar user={user} />
               </Link>
-              <button onClick={() => { logout(); navigate('/') }}
-                className={`bg-transparent border-none cursor-pointer text-[#7A6E5C] hover:text-[#1A1410] transition-all ${scrolled ? 'text-[11px]' : 'text-[12px]'}`}>
-                Log out
-              </button>
-            </div>
-          ) : (
-            <>
-              <button onClick={() => openModal('login')}
-                className={`px-4 py-[6px] rounded-lg border-[1.5px] border-black/[0.09] font-semibold text-[#1A1410] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all ${scrolled ? 'text-[11px]' : 'text-[13px]'}`}>
-                Log in
-              </button>
-              <button onClick={() => navigate('/register')}
-                className={`px-4 py-[6px] rounded-lg border-none font-bold text-white bg-[#252840] cursor-pointer hover:bg-[#363B6B] transition-all ${scrolled ? 'text-[11px]' : 'text-[13px]'}`}>
-                Sign up
-              </button>
-            </>
-          )}
+            )}
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              className="grid h-10 w-10 place-items-center rounded-full bg-transparent border-none cursor-pointer text-[#252840] hover:bg-[#F8F4EA] transition-colors"
+              aria-label="Menu"
+            >
+              {menuOpen ? (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 4l12 12M16 4L4 16"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M3 6h14M3 10h14M3 14h14"/>
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+      </header>
 
-        {/* Hamburger mobile */}
-        <div className="md:hidden flex items-center gap-3 ml-auto">
-          {user && (
-            <Link to="/profile"
-              className="w-8 h-8 rounded-full bg-[#252840] text-white text-xs font-bold flex items-center justify-center cursor-pointer no-underline">
-              {user.firstName?.[0]?.toUpperCase() ?? 'U'}
-            </Link>
-          )}
-          <button onClick={() => setMenuOpen(o => !o)}
-            className="w-9 h-9 flex flex-col items-center justify-center gap-[5px] bg-transparent border-none cursor-pointer">
-            <span className={`block w-5 h-[2px] bg-[#1A1410] transition-all ${menuOpen ? 'rotate-45 translate-y-[7px]' : ''}`} />
-            <span className={`block w-5 h-[2px] bg-[#1A1410] transition-all ${menuOpen ? 'opacity-0' : ''}`} />
-            <span className={`block w-5 h-[2px] bg-[#1A1410] transition-all ${menuOpen ? '-rotate-45 -translate-y-[7px]' : ''}`} />
-          </button>
-        </div>
-      </nav>
-
-      {/* Menu mobile déroulant */}
+      {/* Drawer mobile */}
       {menuOpen && (
-        <div className="fixed top-[62px] left-0 right-0 z-40 bg-[rgba(248,244,234,0.98)] backdrop-blur-md border-b border-black/[0.09] md:hidden">
-          <div className="flex flex-col py-3">
-            {visibleLinks.map(({ to, label }) => {
-              const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to))
-              return (
-                <Link key={to} to={to}
-                  className={`px-6 py-3 text-[15px] font-medium no-underline transition-all
-                    ${isActive ? 'text-[#1A1410] font-bold bg-black/5' : 'text-[#7A6E5C]'}`}>
+        <div className="fixed inset-0 z-30 lg:hidden" onClick={() => setMenuOpen(false)}>
+          <div
+            className="absolute top-16 right-0 w-72 bg-[#FDFAF4] border-l border-b border-[#E8DDC7] shadow-soft rounded-bl-3xl p-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <nav className="flex flex-col gap-1 mb-6">
+              {visibleLinks.map(({ to, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setMenuOpen(false)}
+                  className={`rounded-xl px-4 py-3 text-base font-semibold no-underline transition-colors ${
+                    isActive(to)
+                      ? 'bg-[#252840] text-[#F8F4EA]'
+                      : 'text-[#1A1410] hover:bg-[#F8F4EA]'
+                  }`}
+                >
                   {label}
                 </Link>
-              )
-            })}
-            <div className="px-6 py-4 flex gap-3 border-t border-black/[0.06] mt-2">
-              {user ? (
-                <button onClick={() => { logout(); navigate('/'); setMenuOpen(false) }}
-                  className="flex-1 py-2 rounded-lg border-[1.5px] border-black/[0.09] text-[14px] font-semibold text-[#7A6E5C] bg-transparent cursor-pointer">
-                  Log out
-                </button>
-              ) : (
-                <>
-                  <button onClick={() => { openModal('login'); setMenuOpen(false) }}
-                    className="flex-1 py-2 rounded-lg border-[1.5px] border-black/[0.09] text-[14px] font-semibold text-[#1A1410] bg-transparent cursor-pointer">
-                    Log in
-                  </button>
-                  <button onClick={() => { navigate('/register'); setMenuOpen(false) }}
-                    className="flex-1 py-2 rounded-lg border-none text-[14px] font-bold text-white bg-[#252840] cursor-pointer">
-                    Sign up
-                  </button>
-                </>
+              ))}
+              {user && (
+                <Link
+                  to="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-xl px-4 py-3 text-base font-semibold text-[#1A1410] hover:bg-[#F8F4EA] no-underline transition-colors"
+                >
+                  Mon profil
+                </Link>
               )}
-            </div>
+            </nav>
+
+            {user ? (
+              <div className="flex flex-col gap-2">
+                <Link
+                  to="/credits"
+                  onClick={() => setMenuOpen(false)}
+                  className="inline-flex items-center gap-2 rounded-full bg-[rgba(61,92,40,0.1)] px-3 py-2 text-sm font-semibold text-[#3D5C28] no-underline w-fit"
+                >
+                  <CreditIcon size="sm" /> {user.credits ?? 0} crédits
+                </Link>
+                <button
+                  onClick={() => { logout(); navigate('/'); setMenuOpen(false) }}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#E8DDC7] text-sm font-semibold text-[#756B5B] bg-transparent cursor-pointer hover:border-red-300 hover:text-red-500 transition-colors"
+                >
+                  Se déconnecter
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => { openModal('login'); setMenuOpen(false) }}
+                  className="px-4 py-3 rounded-xl border border-[#E8DDC7] text-sm font-semibold text-[#252840] bg-transparent cursor-pointer hover:border-[#252840] transition-colors"
+                >
+                  Se connecter
+                </button>
+                <button
+                  onClick={() => { navigate('/register'); setMenuOpen(false) }}
+                  className="px-4 py-3 rounded-xl bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors"
+                >
+                  S'inscrire gratuitement
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

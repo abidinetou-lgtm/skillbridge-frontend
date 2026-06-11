@@ -2,23 +2,49 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
+import { useToast } from '../components/Toast'
+import CreditIcon from '../components/CreditIcon'
 
-const STATUS = {
-  SCHEDULED: { bg: 'bg-[#ECEEF8]', text: 'text-[#252840]', label: 'Planifiée' },
-  ACTIVE:    { bg: 'bg-[#E4EED8]', text: 'text-[#3D5C28]', label: 'En cours'  },
-  COMPLETED: { bg: 'bg-[#F5F5F5]', text: 'text-[#7A6E5C]', label: 'Terminée' },
-  CANCELLED: { bg: 'bg-red-50',    text: 'text-red-500',    label: 'Annulée'  },
+const STATUS_STYLE = {
+  SCHEDULED: { bg: 'bg-[rgba(61,92,40,0.12)]', text: 'text-[#3D5C28]',   label: 'À venir'    },
+  ACTIVE:    { bg: 'bg-[rgba(200,134,75,0.15)]', text: 'text-[#C8864B]', label: 'En direct'  },
+  COMPLETED: { bg: 'bg-[rgba(37,40,64,0.1)]',   text: 'text-[#252840]', label: 'Terminée'   },
+  CANCELLED: { bg: 'bg-red-50',                 text: 'text-red-500',    label: 'Annulée'    },
+}
+
+function AvatarInitials({ name, color }) {
+  const parts = (name ?? '').split(' ')
+  const initials = (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')
+  return (
+    <div
+      className="h-14 w-14 rounded-full flex items-center justify-center text-base font-bold text-white flex-shrink-0"
+      style={{ background: color ?? '#252840' }}
+    >
+      {initials.toUpperCase() || '?'}
+    </div>
+  )
+}
+
+function CalIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <rect x="1" y="3" width="12" height="10" rx="2"/>
+      <path d="M1 6h12M5 1v3M9 1v3"/>
+    </svg>
+  )
 }
 
 export default function Sessions() {
   const navigate  = useNavigate()
   const { user }  = useAuthStore()
-  const [sessions,    setSessions]    = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState('')
-  const [tab,         setTab]         = useState('teach')
-  const [cancelling,  setCancelling]  = useState(null)
-  const [confirmId,   setConfirmId]   = useState(null)
+  const addToast  = useToast()
+
+  const [sessions,   setSessions]   = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState('')
+  const [tab,        setTab]        = useState('teach')
+  const [confirmId,  setConfirmId]  = useState(null)
+  const [cancelling, setCancelling] = useState(null)
 
   const loadSessions = useCallback(async () => {
     if (!user) return
@@ -35,8 +61,8 @@ export default function Sessions() {
 
   useEffect(() => {
     loadSessions()
-    const interval = setInterval(loadSessions, 3000)
-    return () => clearInterval(interval)
+    const id = setInterval(loadSessions, 3000)
+    return () => clearInterval(id)
   }, [loadSessions])
 
   const handleCancel = async (sessionId) => {
@@ -45,8 +71,9 @@ export default function Sessions() {
       await api.post(`/sessions/${sessionId}/end`, { durationSeconds: 0 })
       setConfirmId(null)
       loadSessions()
+      addToast?.('Session annulée', 'info')
     } catch (e) {
-      alert(e.response?.data?.message || 'Erreur lors de l\'annulation')
+      addToast?.(e.response?.data?.message || 'Erreur lors de l\'annulation', 'error')
     } finally {
       setCancelling(null)
     }
@@ -54,38 +81,35 @@ export default function Sessions() {
 
   const teaching = sessions.filter(s => s.teacher?.id === user?.id)
   const learning = sessions.filter(s => s.learner?.id  === user?.id)
-  const list     = (tab === 'teach' ? teaching : learning)
-    .filter(s => s.status !== 'CANCELLED') // masquer les annulées par défaut
-    .concat((tab === 'teach' ? teaching : learning).filter(s => s.status === 'CANCELLED'))
-    // en fait : montrer toutes mais annulées en dernier
+  const list     = tab === 'teach' ? teaching : learning
 
   const formatDate = (iso) => {
     if (!iso) return '—'
-    return new Date(iso).toLocaleString('fr', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
+    return new Date(iso).toLocaleString('fr', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
   return (
-    <main className="pt-[62px] min-h-screen bg-white">
-
-      {/* Confirm annulation modal */}
+    <main className="min-h-screen bg-[#FDFAF4]">
+      {/* Modal annulation */}
       {confirmId && (
         <div className="fixed inset-0 z-[500] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-8 w-[400px] max-w-full shadow-2xl">
-            <h2 className="text-[18px] font-black text-[#1A1410] mb-2">Annuler cette séance ?</h2>
-            <p className="text-[13px] text-[#7A6E5C] mb-6">
+          <div className="bg-white rounded-3xl p-8 w-[400px] max-w-full shadow-soft border border-[#E8DDC7]">
+            <h2 className="text-lg font-black text-[#252840] mb-2">Annuler cette séance ?</h2>
+            <p className="text-sm text-[#756B5B] mb-6">
               La séance sera marquée comme annulée. Les crédits réservés seront remboursés.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => handleCancel(confirmId)}
+              <button
+                onClick={() => handleCancel(confirmId)}
                 disabled={!!cancelling}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white text-[14px] font-bold border-none cursor-pointer hover:bg-red-600 transition-all disabled:opacity-50">
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-bold border-none cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
                 {cancelling ? 'Annulation…' : 'Confirmer l\'annulation'}
               </button>
-              <button onClick={() => setConfirmId(null)}
-                className="px-5 py-3 rounded-xl border-[1.5px] border-black/[0.09] text-[#7A6E5C] text-[14px] font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-all">
+              <button
+                onClick={() => setConfirmId(null)}
+                className="px-5 py-3 rounded-xl border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-colors"
+              >
                 Retour
               </button>
             </div>
@@ -93,118 +117,123 @@ export default function Sessions() {
         </div>
       )}
 
-      <div className="max-w-[860px] mx-auto px-6 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-1">Mes séances</p>
-            <h1 className="text-[28px] font-black tracking-[-1px] text-[#1A1410]">Sessions</h1>
-          </div>
-          <button onClick={() => navigate('/sessions/new')}
-            className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all flex items-center gap-2">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M6 1v10M1 6h10"/>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
+          <h1 className="text-4xl font-black tracking-tight text-[#252840]">Mes sessions</h1>
+          <button
+            onClick={() => navigate('/sessions/new')}
+            className="inline-flex items-center gap-2 rounded-full bg-[#C8864B] px-5 py-2.5 text-sm font-bold text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors w-fit"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M7 1v12M1 7h12"/>
             </svg>
-            Nouvelle séance
+            Nouvelle session
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-black/[0.09] mb-6">
-          {[
-            { key: 'teach', label: `Je donne (${teaching.length})` },
-            { key: 'learn', label: `Je reçois (${learning.length})` },
-          ].map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-5 py-3 text-[13px] font-semibold border-none bg-transparent cursor-pointer border-b-2 -mb-px transition-all
-                ${tab === t.key ? 'text-[#252840] border-[#252840]' : 'text-[#7A6E5C] border-transparent hover:text-[#1A1410]'}`}>
-              {t.label}
+        <div className="inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-1 mb-8">
+          {[['teach', "J'enseigne"], ['learn', 'Je reçois']].map(([v, l]) => (
+            <button
+              key={v}
+              onClick={() => setTab(v)}
+              className={`rounded-full px-5 py-2 text-sm font-semibold border-none cursor-pointer transition-colors ${
+                tab === v ? 'bg-[#252840] text-[#F8F4EA]' : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+              }`}
+            >
+              {l}
             </button>
           ))}
         </div>
 
-        {error && <p className="text-red-500 text-[13px] mb-4">{error}</p>}
+        {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
         {loading && (
           <div className="flex items-center justify-center py-16">
-            <div className="w-8 h-8 border-2 border-[#252840]/20 border-t-[#252840] rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-[rgba(37,40,64,0.2)] border-t-[#252840] rounded-full animate-spin" />
           </div>
         )}
 
         {!loading && list.length === 0 && (
-          <div className="bg-white border border-black/[0.09] rounded-2xl p-12 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-[#ECEEF8] flex items-center justify-center mx-auto mb-4">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round">
-                <rect x="3" y="4" width="18" height="18" rx="3"/><path d="M3 9h18M9 3v3M15 3v3"/>
-              </svg>
-            </div>
-            <p className="text-[16px] font-semibold text-[#1A1410] mb-2">
-              {tab === 'teach' ? 'Aucune séance à donner' : 'Aucune séance à recevoir'}
+          <div className="rounded-3xl border border-dashed border-[#E8DDC7] bg-white p-12 text-center">
+            <p className="text-lg font-semibold text-[#252840] mb-2">
+              {tab === 'teach' ? 'Aucune session à donner' : 'Aucune session à recevoir'}
             </p>
-            <p className="text-[13px] text-[#7A6E5C] mb-6">
-              {tab === 'teach' ? 'Créez une séance avec l\'un de vos pairs connectés.' : 'Demandez à un pair de planifier une séance avec vous.'}
+            <p className="text-sm text-[#756B5B] mb-6">
+              {tab === 'teach' ? 'Créez une session avec l\'un de vos pairs connectés.' : 'Demandez à un pair de planifier une session avec vous.'}
             </p>
-            <button onClick={() => navigate('/sessions/new')}
-              className="px-5 py-[10px] rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
-              + Nouvelle séance
+            <button
+              onClick={() => navigate('/sessions/new')}
+              className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors"
+            >
+              + Nouvelle session
             </button>
           </div>
         )}
 
-        <div className="flex flex-col gap-4">
+        <div className="space-y-4">
           {list.map(s => {
-            const partner   = tab === 'teach' ? s.learner : s.teacher
-            const st        = STATUS[s.status] ?? STATUS.SCHEDULED
-            const isLive    = s.status === 'ACTIVE'
-            const isCreator = s.teacher?.id === user?.id
-            const canCancel = isCreator && (s.status === 'SCHEDULED' || s.status === 'ACTIVE')
+            const partner     = tab === 'teach' ? s.learner : s.teacher
+            const partnerName = `${partner?.firstName ?? ''} ${partner?.lastName ?? ''}`.trim()
+            const st          = STATUS_STYLE[s.status] ?? STATUS_STYLE.SCHEDULED
+            const isLive      = s.status === 'ACTIVE'
             const isCancelled = s.status === 'CANCELLED'
+            const isCreator   = s.teacher?.id === user?.id
+            const canCancel   = isCreator && (s.status === 'SCHEDULED' || s.status === 'ACTIVE')
 
             return (
-              <div key={s.id}
-                className={`bg-white border rounded-2xl p-5 flex items-center gap-5 transition-all
-                  ${isCancelled ? 'opacity-50 border-black/[0.06]' : isLive ? 'border-[#3D5C28] shadow-[0_0_0_3px_rgba(61,92,40,0.12)] cursor-pointer hover:-translate-y-[2px] hover:shadow-[0_8px_32px_rgba(26,20,16,0.08)]' : 'border-black/[0.09] cursor-pointer hover:-translate-y-[2px] hover:shadow-[0_8px_32px_rgba(26,20,16,0.08)]'}`}
-                onClick={() => !isCancelled && navigate(`/sessions/${s.id}`)}>
-
-                {/* Avatar */}
-                <div className="w-14 h-14 rounded-full bg-[#252840] text-white flex items-center justify-center font-black text-[18px] flex-shrink-0">
-                  {partner?.firstName?.[0] ?? '?'}{partner?.lastName?.[0] ?? ''}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-[16px] font-bold text-[#1A1410]">{s.title || 'Session'}</span>
-                    <span className={`px-3 py-[3px] rounded-full text-[11px] font-bold ${st.bg} ${st.text} ${isLive ? 'animate-pulse' : ''}`}>
-                      {st.label}
-                    </span>
+              <div
+                key={s.id}
+                className={`flex flex-col gap-4 rounded-3xl border bg-white p-5 shadow-card sm:flex-row sm:items-center sm:justify-between transition-all ${
+                  isCancelled ? 'opacity-50 border-[#E8DDC7]' : isLive ? 'border-[#3D5C28] cursor-pointer hover:-translate-y-0.5' : 'border-[#E8DDC7] cursor-pointer hover:-translate-y-0.5 hover:shadow-soft'
+                }`}
+                onClick={() => !isCancelled && navigate(`/sessions/${s.id}`)}
+              >
+                <div className="flex items-center gap-4">
+                  <AvatarInitials name={partnerName} color={isLive ? '#3D5C28' : '#252840'} />
+                  <div>
+                    <p className="text-lg font-bold text-[#252840]">{s.title || 'Session'}</p>
+                    <p className="text-sm text-[#756B5B]">{partnerName}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-[#756B5B]">
+                      <span className="inline-flex items-center gap-1">
+                        <CalIcon /> {formatDate(s.startsAt)}
+                      </span>
+                      <span className="inline-flex items-center gap-1 font-semibold text-[#C8864B]">
+                        <CreditIcon size="sm" /> {s.creditsReserved} cr
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-[13px] text-[#7A6E5C] mb-1">
-                    {tab === 'teach' ? 'Receveur' : 'Donneur'} :{' '}
-                    <span className="font-semibold text-[#1A1410]">{partner?.firstName} {partner?.lastName}</span>
-                    {' · '}{formatDate(s.startsAt)}
-                  </p>
-                  <p className="text-[12px] text-[#7A6E5C]">
-                    {s.creditsReserved} crédits réservés
-                  </p>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                  {!isCancelled && (
+                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${st.bg} ${st.text}`}>
+                    {st.label}
+                  </span>
+                  {isLive && (
                     <button
                       onClick={() => navigate(`/sessions/${s.id}`)}
-                      className={`px-5 py-[9px] rounded-xl text-[13px] font-bold border-none cursor-pointer transition-all
-                        ${isLive ? 'bg-[#3D5C28] text-white hover:bg-[#4E6035]'
-                          : s.status === 'SCHEDULED' ? 'bg-[#252840] text-white hover:bg-[#363B6B]'
-                          : 'bg-[#F5F5F5] text-[#7A6E5C]'}`}
-                      disabled={s.status === 'COMPLETED'}>
-                      {isLive ? 'Rejoindre' : s.status === 'SCHEDULED' ? 'Ouvrir' : 'Voir'}
+                      className="inline-flex items-center gap-2 rounded-full bg-[#C8864B] px-4 py-2 text-sm font-bold text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                        <rect x="1" y="3" width="9" height="9" rx="2"/><path d="M10 5l4-2v8l-4-2"/>
+                      </svg>
+                      Rejoindre
+                    </button>
+                  )}
+                  {s.status === 'SCHEDULED' && (
+                    <button
+                      onClick={() => navigate(`/sessions/${s.id}`)}
+                      className="rounded-full border-2 border-[#252840] px-4 py-2 text-sm font-bold text-[#252840] bg-transparent cursor-pointer hover:bg-[#F8F4EA] transition-colors"
+                    >
+                      Ouvrir
                     </button>
                   )}
                   {canCancel && (
                     <button
                       onClick={() => setConfirmId(s.id)}
-                      className="px-4 py-[7px] rounded-xl border-[1.5px] border-red-200 text-red-500 text-[12px] font-semibold bg-transparent cursor-pointer hover:bg-red-50 transition-all">
+                      className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500 bg-transparent cursor-pointer hover:bg-red-50 transition-colors"
+                    >
                       Annuler
                     </button>
                   )}

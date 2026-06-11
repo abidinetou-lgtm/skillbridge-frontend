@@ -1,4 +1,3 @@
-// src/pages/NewSession.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
@@ -10,26 +9,26 @@ export default function NewSession() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const { user } = useAuthStore()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
   const [connections, setConnections] = useState([])
+  const [createdLink, setCreatedLink] = useState(null)
   const [form, setForm] = useState({
-    title: '',
-    description: '',
-    category: 'Mathematics',
-    date: '',
-    time: '',
-    duration: 60,
-    creditsPerMin: 1,
-    studentId: params.get('with') || '',
-    studentName: params.get('name') || '',
-    isOpen: false,
+    title:          '',
+    description:    '',
+    category:       'Mathematics',
+    date:           '',
+    time:           '',
+    duration:       60,
+    creditsPerMin:  1,
+    sessionMode:    null,        // 'cadree' | 'ouverte'
+    invitedIds:     params.get('with') ? [params.get('with')] : [],
     maxParticipants: 3,
+    openLimit:      '',
   })
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  // Load accepted connections to use as student picker
   useEffect(() => {
     if (!user) return
     api.get('/matches/mine')
@@ -46,22 +45,46 @@ export default function NewSession() {
       .catch(() => {})
   }, [user])
 
+  const toggleInvite = (id) => {
+    setForm(p => {
+      const has = p.invitedIds.includes(id)
+      return { ...p, invitedIds: has ? p.invitedIds.filter(x => x !== id) : [...p.invitedIds, id] }
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.studentId) { setError('Please select a student'); return }
+    if (!form.sessionMode) { setError('Sélectionnez un mode de session'); return }
+    if (form.sessionMode === 'cadree' && form.invitedIds.length === 0) {
+      setError('Invitez au moins un participant pour une session cadrée')
+      return
+    }
     setError('')
     setLoading(true)
     try {
       const scheduledAt = new Date(`${form.date}T${form.time}:00`).toISOString()
-      await api.post('/sessions', {
-        learnerId:         form.studentId,
+      const body = {
         title:             form.title,
         estimatedDuration: form.duration,
         scheduledAt,
-      })
-      navigate('/sessions')
+        isOpen:            form.sessionMode === 'ouverte',
+      }
+      if (form.sessionMode === 'cadree') {
+        body.learnerId         = form.invitedIds[0]
+        body.maxParticipants   = form.maxParticipants
+        body.invitedIds        = form.invitedIds.slice(1)
+      } else {
+        if (form.openLimit) body.maxParticipants = Number(form.openLimit)
+      }
+      const res = await api.post('/sessions', body)
+      const sessionId = res.data?.session?.id ?? res.data?.id
+      if (form.sessionMode === 'ouverte' && sessionId) {
+        setCreatedLink(`${window.location.origin}/sessions/${sessionId}`)
+      } else {
+        navigate('/sessions')
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create session')
+      setError(err.response?.data?.message || 'Erreur lors de la création')
     } finally {
       setLoading(false)
     }
@@ -70,105 +93,213 @@ export default function NewSession() {
   const inputClass = "w-full px-4 py-[10px] rounded-xl border-[1.5px] border-black/[0.09] bg-white text-[14px] text-[#1A1410] outline-none focus:border-[#252840] transition-all"
   const labelClass = "text-[11px] font-bold uppercase tracking-[0.6px] text-[#7A6E5C] block mb-1"
 
+  /* ── Écran lien de partage ── */
+  if (createdLink) return (
+    <main className="pt-[62px] min-h-screen bg-[#F8F4EA] flex items-center justify-center p-6">
+      <div className="bg-white rounded-2xl border border-black/[0.09] p-10 w-full max-w-[480px] text-center shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-[#E4EED8] flex items-center justify-center mx-auto mb-5">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3D5C28" strokeWidth="2" strokeLinecap="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <h2 className="text-[22px] font-black text-[#1A1410] mb-2">Session créée !</h2>
+        <p className="text-[14px] text-[#7A6E5C] mb-6">Partagez ce lien pour inviter des participants.</p>
+        <div className="bg-[#F8F4EA] rounded-xl px-4 py-3 flex items-center gap-3 mb-5">
+          <p className="flex-1 text-[12px] text-[#252840] font-mono truncate">{createdLink}</p>
+          <button
+            onClick={() => navigator.clipboard?.writeText(createdLink)}
+            className="px-3 py-1 rounded-lg bg-[#252840] text-white text-[11px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all flex-shrink-0">
+            Copier
+          </button>
+        </div>
+        <button onClick={() => navigate('/sessions')}
+          className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
+          Voir mes sessions →
+        </button>
+      </div>
+    </main>
+  )
+
   return (
     <main className="pt-[62px] min-h-screen bg-white">
-      <div className="max-w-[600px] mx-auto px-6 py-10">
+      <div className="max-w-[640px] mx-auto px-6 py-10">
         <button onClick={() => navigate(-1)}
           className="flex items-center gap-2 text-[13px] text-[#7A6E5C] font-medium bg-transparent border-none cursor-pointer hover:text-[#1A1410] transition-all mb-6">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M9 2L4 7l5 5"/></svg>
-          Back
+          Retour
         </button>
 
-        <h1 className="text-[28px] font-black tracking-tight text-[#1A1410] mb-2">New Session</h1>
-        <p className="text-[14px] text-[#7A6E5C] mb-8">Schedule a teaching or learning session</p>
+        <h1 className="text-[28px] font-black tracking-tight text-[#1A1410] mb-2">Nouvelle session</h1>
+        <p className="text-[14px] text-[#7A6E5C] mb-8">Planifiez une session d'enseignement ou d'apprentissage</p>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-black/[0.09] p-8 flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           {error && <p className="text-red-500 text-[13px] bg-red-50 px-4 py-3 rounded-xl">{error}</p>}
 
-          <div>
-            <label className={labelClass}>Session title</label>
-            <input className={inputClass} placeholder="e.g. Maths — Derivatives & Integrals"
-              value={form.title} onChange={e => set('title', e.target.value)} required />
-          </div>
-
-          <div>
-            <label className={labelClass}>Description</label>
-            <textarea className={`${inputClass} resize-none h-24`} placeholder="What will you cover in this session?"
-              value={form.description} onChange={e => set('description', e.target.value)} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {/* Infos de base */}
+          <div className="bg-white rounded-2xl border border-black/[0.09] p-6 flex flex-col gap-5">
             <div>
-              <label className={labelClass}>Category</label>
+              <label className={labelClass}>Titre de la session</label>
+              <input className={inputClass} placeholder="ex. Maths — Dérivées & Intégrales"
+                value={form.title} onChange={e => set('title', e.target.value)} required />
+            </div>
+            <div>
+              <label className={labelClass}>Description</label>
+              <textarea className={`${inputClass} resize-none h-20`} placeholder="Ce que vous allez couvrir…"
+                value={form.description} onChange={e => set('description', e.target.value)} />
+            </div>
+            <div>
+              <label className={labelClass}>Catégorie</label>
               <select className={inputClass} value={form.category} onChange={e => set('category', e.target.value)}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
-            <div>
-              <label className={labelClass}>Receveur (vos pairs connectés)</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Date</label>
+                <input type="date" className={inputClass} value={form.date} onChange={e => set('date', e.target.value)} required />
+              </div>
+              <div>
+                <label className={labelClass}>Heure</label>
+                <input type="time" className={inputClass} value={form.time} onChange={e => set('time', e.target.value)} required />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Durée (min)</label>
+                <select className={inputClass} value={form.duration} onChange={e => set('duration', Number(e.target.value))}>
+                  {[30,45,60,90,120].map(d => <option key={d} value={d}>{d} min</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Crédits / minute</label>
+                <select className={inputClass} value={form.creditsPerMin} onChange={e => set('creditsPerMin', Number(e.target.value))}>
+                  {[1,2,3].map(n => <option key={n} value={n}>{n} cr/min</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="bg-[#ECEEF8] rounded-xl px-5 py-3">
+              <p className="text-[12px] text-[#252840]">
+                Coût estimé : <strong>{form.duration * form.creditsPerMin} crédits</strong>
+                <span className="text-[#7A6E5C]"> ({form.duration} min × {form.creditsPerMin} cr/min)</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Choix du mode */}
+          <div>
+            <p className="text-[13px] font-bold text-[#1A1410] mb-3">Mode de session</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+              {/* Carte Session cadrée */}
+              <button type="button" onClick={() => set('sessionMode', 'cadree')}
+                className={`text-left p-5 rounded-2xl border-[2px] cursor-pointer transition-all bg-transparent
+                  ${form.sessionMode === 'cadree'
+                    ? 'border-[#252840] bg-[#ECEEF8]'
+                    : 'border-black/[0.09] hover:border-[#252840]/40 bg-white'}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center
+                    ${form.sessionMode === 'cadree' ? 'bg-[#252840]' : 'bg-[#F0F1FA]'}`}>
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={form.sessionMode === 'cadree' ? 'white' : '#252840'} strokeWidth="1.6" strokeLinecap="round">
+                      <circle cx="7" cy="6" r="3"/><circle cx="13" cy="6" r="2.5"/>
+                      <path d="M1 16c0-3.3 2.7-6 6-6"/><path d="M13 11c2.8 0 5 2.2 5 5"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-[#1A1410]">Session cadrée</p>
+                    {form.sessionMode === 'cadree' && <p className="text-[10px] text-[#252840] font-semibold">Sélectionné</p>}
+                  </div>
+                </div>
+                <p className="text-[12px] text-[#7A6E5C] leading-relaxed">
+                  Vous invitez des participants précis parmi vos connexions. Accès limité aux personnes invitées.
+                </p>
+              </button>
+
+              {/* Carte Session ouverte */}
+              <button type="button" onClick={() => set('sessionMode', 'ouverte')}
+                className={`text-left p-5 rounded-2xl border-[2px] cursor-pointer transition-all bg-transparent
+                  ${form.sessionMode === 'ouverte'
+                    ? 'border-[#3D5C28] bg-[#E4EED8]'
+                    : 'border-black/[0.09] hover:border-[#3D5C28]/40 bg-white'}`}>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center
+                    ${form.sessionMode === 'ouverte' ? 'bg-[#3D5C28]' : 'bg-[#EEF4E8]'}`}>
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={form.sessionMode === 'ouverte' ? 'white' : '#3D5C28'} strokeWidth="1.6" strokeLinecap="round">
+                      <circle cx="6" cy="6" r="3"/><circle cx="12" cy="6" r="3"/><circle cx="9" cy="13" r="3"/>
+                      <path d="M8.5 9.5l-2 2"/><path d="M9.5 9.5l2 2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-[#1A1410]">Session ouverte</p>
+                    {form.sessionMode === 'ouverte' && <p className="text-[10px] text-[#3D5C28] font-semibold">Sélectionné</p>}
+                  </div>
+                </div>
+                <p className="text-[12px] text-[#7A6E5C] leading-relaxed">
+                  Toute personne avec le lien peut rejoindre. Un lien de partage est généré après création.
+                </p>
+              </button>
+            </div>
+          </div>
+
+          {/* Contenu mode cadrée */}
+          {form.sessionMode === 'cadree' && (
+            <div className="bg-white rounded-2xl border border-black/[0.09] p-6 flex flex-col gap-4">
+              <p className="text-[13px] font-bold text-[#1A1410]">Inviter des participants</p>
               {connections.length === 0 ? (
-                <div className={`${inputClass} text-[#B0A898]`}>
-                  No accepted connections yet
+                <div className="bg-[#F8F4EA] rounded-xl p-4 text-[13px] text-[#7A6E5C]">
+                  Aucune connexion acceptée pour le moment. Connectez-vous à des membres d'abord.
                 </div>
               ) : (
-                <select
-                  className={inputClass}
-                  value={form.studentId}
-                  onChange={e => {
-                    const selected = connections.find(c => c.id === e.target.value)
-                    set('studentId', e.target.value)
-                    set('studentName', selected?.name || '')
-                  }}
-                  required>
-                  <option value="">Select a student…</option>
+                <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto">
                   {connections.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <label key={c.id}
+                      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border
+                        ${form.invitedIds.includes(c.id) ? 'bg-[#ECEEF8] border-[#252840]/30' : 'bg-[#F8F4EA] border-transparent hover:border-black/[0.09]'}`}>
+                      <input type="checkbox" className="accent-[#252840] w-4 h-4"
+                        checked={form.invitedIds.includes(c.id)}
+                        onChange={() => toggleInvite(c.id)} />
+                      <div className="w-8 h-8 rounded-full bg-[#252840] text-white text-[12px] font-bold flex items-center justify-center flex-shrink-0">
+                        {c.name[0]}
+                      </div>
+                      <span className="text-[13px] font-semibold text-[#1A1410]">{c.name}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
+              )}
+              <div>
+                <label className={labelClass}>Nombre max de participants (2–10)</label>
+                <input type="number" min="2" max="10" className={inputClass}
+                  value={form.maxParticipants}
+                  onChange={e => set('maxParticipants', Math.min(10, Math.max(2, Number(e.target.value))))} />
+              </div>
+              {form.invitedIds.length > 0 && (
+                <p className="text-[12px] text-[#3D5C28] font-semibold">
+                  {form.invitedIds.length} participant{form.invitedIds.length > 1 ? 's' : ''} sélectionné{form.invitedIds.length > 1 ? 's' : ''}
+                </p>
               )}
             </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Date</label>
-              <input type="date" className={inputClass} value={form.date} onChange={e => set('date', e.target.value)} required />
+          {/* Contenu mode ouverte */}
+          {form.sessionMode === 'ouverte' && (
+            <div className="bg-white rounded-2xl border border-black/[0.09] p-6 flex flex-col gap-4">
+              <p className="text-[13px] font-bold text-[#1A1410]">Paramètres de la session ouverte</p>
+              <div>
+                <label className={labelClass}>Limite de participants (optionnel)</label>
+                <input type="number" min="2" max="50" className={inputClass}
+                  placeholder="Laisser vide = illimité"
+                  value={form.openLimit}
+                  onChange={e => set('openLimit', e.target.value)} />
+                <p className="text-[11px] text-[#7A6E5C] mt-1">Un lien de partage sera généré après création de la session.</p>
+              </div>
             </div>
-            <div>
-              <label className={labelClass}>Time</label>
-              <input type="time" className={inputClass} value={form.time} onChange={e => set('time', e.target.value)} required />
-            </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Duration (minutes)</label>
-              <select className={inputClass} value={form.duration} onChange={e => set('duration', Number(e.target.value))}>
-                {[30,45,60,90,120].map(d => <option key={d} value={d}>{d} min</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Credits per minute</label>
-              <select className={inputClass} value={form.creditsPerMin} onChange={e => set('creditsPerMin', Number(e.target.value))}>
-                {[1,2,3].map(n => <option key={n} value={n}>{n} credit/min</option>)}
-              </select>
-            </div>
-          </div>
-
-
-
-          <div className="bg-[#ECEEF8] rounded-xl px-5 py-4">
-            <p className="text-[13px] font-bold text-[#252840] mb-1">Estimation du coût</p>
-            <p className="text-[12px] text-[#7A6E5C]">
-              Total: <strong className="text-[#252840]">{form.duration * form.creditsPerMin} crédits</strong>
-              &nbsp;({form.duration} min × {form.creditsPerMin} crédit/min)
-  
-            </p>
-          </div>
-
-          <button type="submit" disabled={loading || !form.studentId}
-            className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50 mt-2">
-            {loading ? 'Creating…' : 'Create session'}
+          <button type="submit"
+            disabled={loading || !form.sessionMode || (form.sessionMode === 'cadree' && form.invitedIds.length === 0)}
+            className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50">
+            {loading ? 'Création…' : 'Créer la session'}
           </button>
         </form>
       </div>

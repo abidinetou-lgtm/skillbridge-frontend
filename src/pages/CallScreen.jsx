@@ -142,8 +142,9 @@ function ParticipantTile({ participant, isLarge, isSpeaking, videoRef }) {
           </span>
         )}
         {participant.handRaised && (
-          <span className="bg-yellow-500 text-white text-[10px] font-bold px-2 py-[2px] rounded-full">
-            ✋ Hand raised
+          <span className="inline-flex items-center gap-1 bg-yellow-500 text-white text-[10px] font-bold px-2 py-[2px] rounded-full">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 1v5M5 1v5.5M7 2.5v4M1 7.5c0 0 .5 1.5 4 1.5s4-1.5 4-1.5V6H1z"/></svg>
+            Hand raised
           </span>
         )}
       </div>

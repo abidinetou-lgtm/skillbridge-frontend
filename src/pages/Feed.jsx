@@ -98,7 +98,7 @@ export default function Feed() {
                 <h2 className="text-[18px] font-black text-[#1A1410]">Nouveau post</h2>
                 <button onClick={() => setAddOpen(false)}
                   className="w-8 h-8 rounded-full bg-black/[0.06] border-none cursor-pointer text-[#7A6E5C] flex items-center justify-center hover:bg-black/10 transition-all">
-                  ✕
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1l10 10M11 1L1 11"/></svg>
                 </button>
               </div>
               <textarea

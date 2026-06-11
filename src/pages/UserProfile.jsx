@@ -58,7 +58,10 @@ function PostThumb({ color, text, likes, time }) {
       <div className="p-3">
         <p className="text-[12px] text-[#3D3020] leading-[1.4] line-clamp-2">{text}</p>
         <div className="flex items-center gap-2 mt-2">
-          <span className="text-[10px] text-[#7A6E5C]">❤ {likes}</span>
+          <span className="inline-flex items-center gap-1 text-[10px] text-[#7A6E5C]">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" stroke="none"><path d="M5 9S1 6.5 1 3.5a2.5 2.5 0 015 0 2.5 2.5 0 015 0C11 6.5 5 9 5 9z"/></svg>
+            {likes}
+          </span>
           <span className="text-[10px] text-[#7A6E5C] ml-auto">{time}</span>
         </div>
       </div>
@@ -80,7 +83,14 @@ export default function UserProfile() {
   if (!profile) return (
     <main className="pt-[62px] min-h-screen bg-white flex items-center justify-center">
       <div className="text-center">
-        <div className="text-[48px] mb-4">😕</div>
+        <div className="mb-4 flex justify-center">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#756B5B" strokeWidth="2" strokeLinecap="round">
+            <circle cx="24" cy="24" r="20"/>
+            <circle cx="17" cy="19" r="2" fill="#756B5B"/>
+            <circle cx="31" cy="19" r="2" fill="#756B5B"/>
+            <path d="M17 32c1.5-3 12.5-3 14 0"/>
+          </svg>
+        </div>
         <p className="text-[16px] font-semibold text-[#1A1410]">Profile not found</p>
         <button onClick={() => navigate('/connection')} className="mt-4 text-[#252840] font-bold bg-transparent border-none cursor-pointer text-[14px]">
           ← Back to connections

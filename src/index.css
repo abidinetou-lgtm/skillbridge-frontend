@@ -1,17 +1,51 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
-/* Scrollbar invisible sur le feed */
+
+/* ── Scrollbar invisible ── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
- 
-/* Animation cookie banner */
+
+/* ── Animation cookie banner ── */
 @keyframes slideUp {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
- 
-/* Police Inter partout */
+
+/* ── Police Inter ── */
 * { font-family: 'Inter', sans-serif; }
+
+/* ── CSS Variables design system Lovable ── */
+:root {
+  --navy:        #252840;
+  --orange:      #C8864B;
+  --sage:        #3D5C28;
+  --cream:       #F8F4EA;
+  --light-cream: #FDFAF4;
+  --navy-dark:   #1A1410;
+  --border:      #E8DDC7;
+  --muted-fg:    #756B5B;
+
+  --gradient-banner: linear-gradient(120deg, #252840 0%, #3a3a5a 45%, #C8864B 100%);
+  --gradient-hero:   radial-gradient(circle at 20% 20%, rgba(200,134,75,0.12), transparent 45%);
+  --shadow-soft: 0 10px 40px -12px rgba(37,40,64,0.18);
+  --shadow-card: 0 4px 24px -10px rgba(37,40,64,0.15);
+}
+
+/* ── Animations ── */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+h1, h2, h3 { letter-spacing: -0.03em; }
+
+/* ── Carrousel infini communauté ── */
+@keyframes scroll-left {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
  

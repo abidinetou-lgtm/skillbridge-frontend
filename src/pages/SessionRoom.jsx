@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
+import { useToast } from '../components/Toast'
+import CreditIcon from '../components/CreditIcon'
 
 const fmt = (s) =>
   `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -10,32 +12,40 @@ export default function SessionRoom() {
   const { id }      = useParams()
   const navigate    = useNavigate()
   const { user }    = useAuthStore()
+  const addToast    = useToast()
   const iframeRef   = useRef(null)
-  const apiRef      = useRef(null)
   const intervalRef = useRef(null)
   const pollRef     = useRef(null)
 
-  const [session,   setSession]   = useState(null)
-  const [phase,     setPhase]     = useState('waiting')
-  const [seconds,   setSeconds]   = useState(0)
-  const [credits,   setCredits]   = useState(user?.credits ?? 120)
-  const [rating,    setRating]    = useState(0)
-  const [loadError, setLoadError] = useState('')
-  const [joining,   setJoining]   = useState(false)
+  const [session,          setSession]          = useState(null)
+  const [phase,            setPhase]            = useState('waiting')
+  const [seconds,          setSeconds]          = useState(0)
+  const [credits,          setCredits]          = useState(user?.credits ?? 120)
+  const [rating,           setRating]           = useState(0)
+  const [ratingSubmitted,  setRatingSubmitted]  = useState(false)
+  const [loadError,        setLoadError]        = useState('')
+  const [joining,          setJoining]          = useState(false)
+  const [adminParticipants,setAdminParticipants] = useState([])
+  const [sessionLocked,    setSessionLocked]    = useState(false)
+  const [editMaxPart,      setEditMaxPart]      = useState('')
 
   const loadSession = async () => {
     try {
       const res = await api.get(`/sessions/${id}`)
       const s = res.data.session ?? res.data
       return {
-        id:          s.id,
-        title:       s.title ?? 'Session',
-        duration:    s.creditsReserved ?? 60,
-        myRole:      s.teacher?.id === user?.id ? 'teacher' : 'learner',
-        teacherName: `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
-        studentName: `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
-        jitsiRoomId: s.jitsiRoomId,
-        status:      s.status,
+        id:               s.id,
+        title:            s.title ?? 'Session',
+        duration:         s.creditsReserved ?? 60,
+        myRole:           s.teacher?.id === user?.id ? 'teacher' : 'learner',
+        teacherName:      `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
+        studentName:      `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
+        jitsiRoomId:      s.jitsiRoomId,
+        status:           s.status,
+        isOpen:           s.isOpen ?? false,
+        maxParticipants:  s.maxParticipants ?? null,
+        participantCount: s.participants?.length ?? s.participantCount ?? (s.isOpen ? 1 : null),
+        participants:     s.participants ?? [],
       }
     } catch {
       setLoadError('Session introuvable ou accès refusé.')
@@ -47,7 +57,6 @@ export default function SessionRoom() {
     loadSession().then(s => { if (s) setSession(s) })
   }, [id, user?.id])
 
-  // Learner : rejoindre auto quand teacher démarre
   useEffect(() => {
     if (!session || phase !== 'waiting' || session.myRole === 'teacher') return
     pollRef.current = setInterval(async () => {
@@ -70,24 +79,16 @@ export default function SessionRoom() {
   }, [phase])
 
   useEffect(() => {
-    return () => {
-      clearInterval(intervalRef.current)
-      clearInterval(pollRef.current)
-    }
+    return () => { clearInterval(intervalRef.current); clearInterval(pollRef.current) }
   }, [])
 
   const isTeacher   = session?.myRole === 'teacher'
   const cost        = Math.ceil(seconds / 60)
   const creditDelta = isTeacher ? `+${cost}` : `-${cost}`
-  const deltaColor  = isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'
 
   const launchJitsi = (roomName) => {
     if (!iframeRef.current) return
-
-    const displayName = encodeURIComponent(
-      `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim()
-    )
-
+    const displayName = encodeURIComponent(`${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim())
     const params = [
       'config.prejoinPageEnabled=false',
       'config.startWithAudioMuted=false',
@@ -102,7 +103,6 @@ export default function SessionRoom() {
       'interfaceConfig.DISABLE_JOIN_LEAVE_NOTIFICATIONS=true',
       `userInfo.displayName=${displayName}`,
     ].join('&')
-
     iframeRef.current.src = `https://meet.jit.si/${roomName}#${params}`
     setTimeout(() => setPhase('active'), 2000)
   }
@@ -114,80 +114,99 @@ export default function SessionRoom() {
     try {
       const res = await api.post(`/sessions/${id}/join`)
       if (res.data.jitsiRoomId) roomName = res.data.jitsiRoomId
-    } catch (e) {
-      console.warn('join error:', e)
-    }
+    } catch (e) { console.warn('join error:', e) }
     launchJitsi(roomName)
     setJoining(false)
+  }
+
+  const sendJitsiCmd = (type, payload = {}) => {
+    try { iframeRef.current?.contentWindow?.postMessage({ type, ...payload }, '*') }
+    catch (e) { console.warn('Jitsi postMessage failed:', type, e) }
+  }
+
+  const lockSession = () => {
+    setSessionLocked(l => !l)
+    sendJitsiCmd('toggleLobby', { enabled: !sessionLocked })
+  }
+
+  const submitRating = async () => {
+    if (!rating || ratingSubmitted) return
+    try {
+      await api.post(`/sessions/${id}/rating`, { rating })
+      setRatingSubmitted(true)
+      addToast?.('Merci pour votre évaluation !', 'success')
+    } catch (e) { console.warn('rating error:', e) }
   }
 
   const handleEndSession = async () => {
     if (iframeRef.current) iframeRef.current.src = 'about:blank'
     clearInterval(intervalRef.current)
     clearInterval(pollRef.current)
-    try {
-      await api.post(`/sessions/${id}/end`, { durationSeconds: seconds })
-    } catch (e) { console.warn('end error:', e) }
+    try { await api.post(`/sessions/${id}/end`, { durationSeconds: seconds }) }
+    catch (e) { console.warn('end error:', e) }
     setPhase('ended')
   }
 
   if (loadError) return (
-    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex flex-col items-center justify-center gap-4">
-      <p className="text-white/60 text-[16px]">{loadError}</p>
+    <main className="min-h-screen bg-[#1A1410] flex flex-col items-center justify-center gap-4">
+      <p className="text-white/60">{loadError}</p>
       <button onClick={() => navigate('/sessions')}
-        className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer">
+        className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
         Retour aux sessions
       </button>
     </main>
   )
 
   if (!session) return (
-    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex items-center justify-center">
+    <main className="min-h-screen bg-[#1A1410] flex items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-        <p className="text-white/50 text-[14px]">Chargement…</p>
+        <p className="text-white/50 text-sm">Chargement…</p>
       </div>
     </main>
   )
 
   return (
-    <main className="pt-[62px] min-h-screen bg-[#1A1410] flex flex-col">
+    <main className="min-h-screen bg-[#1A1410] flex flex-col">
 
-      {/* Topbar */}
-      <div className="bg-[#1E2035] border-b border-white/[0.07] px-6 py-3 flex items-center gap-4 flex-shrink-0">
+      {/* Top bar */}
+      <div className="bg-[#1A1410] border-b border-white/[0.07] px-5 py-3 flex items-center gap-3 flex-shrink-0">
         <button
           onClick={() => { if (phase === 'active') handleEndSession(); else navigate('/sessions') }}
-          className="text-white/50 hover:text-white bg-transparent border-none cursor-pointer transition-all">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M11 3L6 9l5 6"/>
+          className="h-9 w-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center cursor-pointer transition-colors flex-shrink-0">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M10 3L5 8l5 5"/>
           </svg>
         </button>
+
         <div className="flex-1 min-w-0">
-          <div className="text-white font-bold text-[14px] truncate">{session.title}</div>
-          <div className="text-white/40 text-[11px]">
-            {isTeacher ? 'Donneur' : 'Receveur'} · {isTeacher ? session.studentName : session.teacherName}
-          </div>
+          <p className="text-white font-bold text-sm truncate">{session.title}</p>
+          <p className="text-white/40 text-xs">
+            avec {isTeacher ? session.studentName : session.teacherName}
+          </p>
         </div>
+
         {phase === 'active' && (
-          <div className="flex items-center gap-3 bg-white/[0.06] px-4 py-2 rounded-full">
-            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-white font-black text-[18px] tabular-nums">{fmt(seconds)}</span>
-            <span className={`text-[13px] font-bold ${deltaColor}`}>{creditDelta} cr</span>
+          <div className="flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-4 py-2">
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+            <span className="text-white font-black text-lg tabular-nums font-mono">{fmt(seconds)}</span>
           </div>
         )}
-        <div className="bg-white/[0.06] px-4 py-2 rounded-full">
-          <span className="text-white/60 text-[11px]">Balance: </span>
-          <span className="text-white font-bold text-[13px]">{Math.floor(credits)} cr</span>
+
+        <div className="flex items-center gap-1.5 rounded-full bg-[rgba(200,134,75,0.2)] border border-[rgba(200,134,75,0.25)] px-3 py-2">
+          <CreditIcon size="sm" />
+          <span className="text-[#C8864B] font-bold text-sm">{Math.floor(credits)} cr</span>
+          {phase === 'active' && (
+            <span className={`text-xs font-bold ${isTeacher ? 'text-[#86C46E]' : 'text-[#C8864B]'}`}>{creditDelta}</span>
+          )}
         </div>
       </div>
 
-      {/* Zone principale */}
+      {/* Main area */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* Zone vidéo */}
+        {/* Video zone */}
         <div className="flex-1 relative bg-[#1A1410]">
-
-          {/* iframe Jitsi — toujours monté, caché en phase waiting/ended */}
           <iframe
             ref={iframeRef}
             src="about:blank"
@@ -197,41 +216,38 @@ export default function SessionRoom() {
             style={{ display: phase === 'active' ? 'block' : 'none' }}
           />
 
-          {/* Écran d'attente */}
+          {/* Waiting screen */}
           {phase === 'waiting' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
-              <div className="w-20 h-20 rounded-full bg-white/[0.06] flex items-center justify-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4">
+              <div className="h-20 w-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
                 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round">
                   <rect x="3" y="7" width="22" height="22" rx="4"/>
                   <path d="M25 14l8-5v18l-8-5"/>
                 </svg>
               </div>
               <div className="text-center">
-                <p className="text-white font-bold text-[20px] mb-2">{session.title}</p>
-                <p className="text-white/50 text-[14px] mb-1">
+                <p className="text-white font-bold text-xl mb-2">{session.title}</p>
+                <p className="text-white/50 text-sm mb-1">
                   {isTeacher ? `Receveur : ${session.studentName}` : `Donneur : ${session.teacherName}`}
                 </p>
-                <p className="text-white/40 text-[12px]">
-                  {session.duration} crédits réservés · {isTeacher ? 'Vous allez gagner des crédits' : 'Crédits réservés'}
-                </p>
+                <p className="text-white/40 text-xs">{session.duration} crédits réservés</p>
               </div>
               {isTeacher ? (
                 <button onClick={startJitsi} disabled={joining}
-                  className="px-8 py-4 rounded-2xl bg-[#3D5C28] text-white text-[15px] font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-all disabled:opacity-40 flex items-center gap-3">
+                  className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-[#3D5C28] text-white font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-colors disabled:opacity-40">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <rect x="2" y="5" width="13" height="13" rx="3"/>
-                    <path d="M15 8l5-3v10l-5-3"/>
+                    <rect x="2" y="5" width="13" height="13" rx="3"/><path d="M15 8l5-3v10l-5-3"/>
                   </svg>
                   {joining ? 'Connexion…' : 'Démarrer la session'}
                 </button>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-3 bg-white/[0.06] px-6 py-3 rounded-full">
+                  <div className="flex items-center gap-3 rounded-full bg-white/5 border border-white/10 px-6 py-3">
                     <div className="w-2 h-2 rounded-full bg-[#C8864B] animate-pulse" />
-                    <span className="text-white/70 text-[13px]">En attente que le donneur démarre…</span>
+                    <span className="text-white/70 text-sm">En attente que le donneur démarre…</span>
                   </div>
                   <button onClick={startJitsi} disabled={joining}
-                    className="px-6 py-3 rounded-xl border-[1.5px] border-white/20 text-white text-[13px] font-semibold bg-transparent cursor-pointer hover:border-white transition-all disabled:opacity-40">
+                    className="px-6 py-3 rounded-full border border-white/20 text-white text-sm font-semibold bg-transparent cursor-pointer hover:border-white transition-colors disabled:opacity-40">
                     {joining ? 'Connexion…' : 'Rejoindre maintenant'}
                   </button>
                 </div>
@@ -239,72 +255,195 @@ export default function SessionRoom() {
             </div>
           )}
 
-          {/* Écran de fin */}
+          {/* End screen */}
           {phase === 'ended' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6">
-              <div className="w-16 h-16 rounded-full bg-[#3D5C28]/30 flex items-center justify-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4">
+              <div className="h-16 w-16 rounded-full bg-[#3D5C28]/30 flex items-center justify-center">
                 <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#86C46E" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M5 14l6 6L23 8"/>
                 </svg>
               </div>
               <div className="text-center">
-                <p className="text-white font-black text-[24px] mb-2">Session terminée !</p>
-                <p className="text-white/50 text-[15px]">
-                  Durée : {fmt(seconds)} · <span className={deltaColor}>{isTeacher ? `+${cost} crédits gagnés` : `${cost} crédits dépensés`}</span>
-                </p>
+                <h2 className="text-3xl font-black text-white mb-2">Session terminée !</h2>
+                <p className="text-white/60 text-sm">Merci pour cet échange de compétences.</p>
               </div>
+
+              {/* Recap cards */}
+              <div className="flex gap-3 flex-wrap justify-center">
+                <div className="rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-center">
+                  <p className="text-white/40 text-xs mb-1">Durée</p>
+                  <p className="text-white font-black text-xl font-mono">{fmt(seconds)}</p>
+                </div>
+                <div className={`rounded-2xl border border-white/10 px-5 py-4 text-center ${isTeacher ? 'bg-[rgba(61,92,40,0.2)]' : 'bg-[rgba(200,134,75,0.15)]'}`}>
+                  <p className="text-white/40 text-xs mb-1">Crédits {isTeacher ? 'gagnés' : 'dépensés'}</p>
+                  <p className={`font-black text-xl ${isTeacher ? 'text-[#86C46E]' : 'text-[#C8864B]'}`}>{isTeacher ? '+' : '-'}{cost}</p>
+                </div>
+                <div className="rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-center">
+                  <p className="text-white/40 text-xs mb-1">Solde restant</p>
+                  <p className="text-white font-black text-xl">{Math.max(0, Math.floor(credits))} cr</p>
+                </div>
+              </div>
+
               {!isTeacher && (
                 <div className="text-center">
-                  <p className="text-white/60 text-[13px] mb-3">Évaluer cette session</p>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(s => (
-                      <button key={s} onClick={() => setRating(s)}
-                        className={`w-11 h-11 rounded-xl text-[16px] font-bold cursor-pointer transition-all border-none
-                          ${s <= rating ? 'bg-[#252840] text-white' : 'bg-white/[0.08] text-white/40 hover:bg-white/20 hover:text-white'}`}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                  {ratingSubmitted ? (
+                    <div className="flex items-center gap-2 bg-[#3D5C28]/20 px-5 py-3 rounded-full">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#86C46E" strokeWidth="2" strokeLinecap="round"><path d="M2 7l3 3 7-6"/></svg>
+                      <p className="text-[#86C46E] text-sm font-bold">Merci pour votre évaluation !</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-white/60 text-sm mb-3">Évaluer cette session</p>
+                      <div className="flex gap-1 justify-center mb-3">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <button key={s} onClick={() => setRating(s)}
+                            className={`cursor-pointer transition-all border-none bg-transparent p-0.5 ${s <= rating ? 'text-[#C8864B]' : 'text-white/20 hover:text-white/50'}`}>
+                            <svg width="28" height="28" viewBox="0 0 28 28" fill={s <= rating ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="14,3 17.5,10 25,11 19.5,16.5 21,24 14,20.5 7,24 8.5,16.5 3,11 10.5,10"/></svg>
+                          </button>
+                        ))}
+                      </div>
+                      {rating > 0 && (
+                        <button onClick={submitRating}
+                          className="px-6 py-2 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
+                          Envoyer
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
-              <div className="flex gap-3">
-                <button onClick={() => navigate('/sessions')}
-                  className="px-6 py-3 rounded-xl border-[1.5px] border-white/20 text-white text-[13px] font-semibold bg-transparent cursor-pointer hover:border-white transition-all">
-                  Retour aux sessions
-                </button>
-                <button onClick={() => navigate('/chat')}
-                  className="px-6 py-3 rounded-xl bg-[#252840] text-white text-[13px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all">
-                  Continuer dans le chat
-                </button>
-              </div>
+
+              <button onClick={() => navigate('/sessions')}
+                className="px-8 py-3 rounded-full bg-[#C8864B] text-white font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors">
+                Retour aux sessions
+              </button>
+            </div>
+          )}
+
+          {/* End button when active */}
+          {phase === 'active' && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+              <button onClick={handleEndSession}
+                className="px-6 py-3 rounded-full bg-red-500 text-white font-bold border-none cursor-pointer hover:bg-red-600 transition-colors shadow-soft">
+                Terminer la session
+              </button>
             </div>
           )}
         </div>
 
-        {/* Sidebar session active */}
-        {phase === 'active' && (
-          <div className="w-[220px] bg-[#1E2035] border-l border-white/[0.07] flex flex-col p-5 gap-4 flex-shrink-0">
-            <h3 className="text-white font-bold text-[13px]">Session info</h3>
-            <div className="flex flex-col">
+        {/* Admin sidebar */}
+        {phase === 'active' && isTeacher && (
+          <div className="w-64 bg-[#1A1410] border-l border-white/[0.07] flex flex-col p-4 gap-4 flex-shrink-0 overflow-y-auto">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#C8864B" strokeWidth="1.6" strokeLinecap="round">
+                  <path d="M15 14v-1.3a2.7 2.7 0 0 0-2-2.6M11 1.2a2.7 2.7 0 0 1 0 5.2M1 14v-1.3a2.7 2.7 0 0 1 2.7-2.7h4.6A2.7 2.7 0 0 1 11 12.7V14"/>
+                  <circle cx="6.5" cy="4" r="2.7"/>
+                </svg>
+                <span className="text-[#C8864B] text-xs font-bold uppercase tracking-wide">Panneau hôte</span>
+              </div>
+
+              {/* Mute all */}
+              <button
+                onClick={() => sendJitsiCmd('muteEveryone')}
+                className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 text-xs font-semibold border-none cursor-pointer transition-colors flex items-center justify-center gap-2 mb-2">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <path d="M6 1v5a2 2 0 0 1-4 0V1M1 6a5 5 0 0 0 10 0M6 11v1"/>
+                  <line x1="1" y1="1" x2="11" y2="11"/>
+                </svg>
+                Couper tous les micros
+              </button>
+
+              {/* Lock */}
+              <button onClick={lockSession}
+                className={`w-full py-2 rounded-xl text-xs font-semibold border-none cursor-pointer transition-colors flex items-center justify-center gap-2 mb-4 ${
+                  sessionLocked ? 'bg-[rgba(200,134,75,0.25)] text-[#C8864B] hover:bg-[rgba(200,134,75,0.35)]' : 'bg-white/5 hover:bg-white/10 text-white/70'
+                }`}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <rect x="2" y="5.5" width="8" height="5.5" rx="1.5"/>
+                  <path d="M4 5.5V3.5a2 2 0 0 1 4 0v2"/>
+                </svg>
+                {sessionLocked ? 'Déverrouiller' : 'Verrouiller la session'}
+              </button>
+
+              {/* Max participants */}
+              {session.isOpen && (
+                <div className="mb-4">
+                  <p className="text-white/40 text-[10px] mb-1.5">Limite participants</p>
+                  <div className="flex gap-2">
+                    <input type="number" min="2" max="50"
+                      placeholder={String(session.maxParticipants ?? '∞')}
+                      value={editMaxPart}
+                      onChange={e => setEditMaxPart(e.target.value)}
+                      className="flex-1 px-2 py-1.5 rounded-lg bg-white/5 text-white text-xs border border-white/10 outline-none focus:border-white/30 w-0" />
+                    <button
+                      onClick={async () => {
+                        if (!editMaxPart) return
+                        try { await api.patch(`/sessions/${id}`, { maxParticipants: Number(editMaxPart) }) }
+                        catch (e) { console.warn(e) }
+                        setEditMaxPart('')
+                      }}
+                      className="px-2 py-1.5 rounded-lg bg-[#252840] text-white text-xs font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors flex-shrink-0">
+                      OK
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Participants list */}
+              {adminParticipants.length > 0 && (
+                <div>
+                  <p className="text-white/40 text-[10px] mb-2">Participants connectés</p>
+                  <div className="flex flex-col gap-1">
+                    {adminParticipants.map(p => (
+                      <div key={p.id} className="flex items-center justify-between bg-white/5 rounded-xl px-3 py-2">
+                        <span className="text-white/70 text-xs truncate">{p.firstName ?? p.name ?? p.id}</span>
+                        <button onClick={() => sendJitsiCmd('kick', { id: p.id })}
+                          className="text-red-400 bg-transparent border-none cursor-pointer hover:text-red-300 flex-shrink-0 ml-2 p-0">
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l8 8M9 1L1 9"/></svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Session info */}
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <p className="text-white/40 text-[10px] font-bold uppercase tracking-wide mb-3">Info session</p>
               {[
                 { label: 'Durée',    value: fmt(seconds) },
-                { label: 'Crédits', value: `${creditDelta} (${Math.floor(credits)} restants)` },
-                { label: 'Rôle',    value: isTeacher ? 'Donneur' : 'Receveur' },
-                { label: 'Réservés',value: `${session.duration} cr` },
+                { label: 'Rôle',     value: 'Donneur' },
+                { label: 'Réservés', value: `${session.duration} cr` },
               ].map(row => (
-                <div key={row.label} className="flex justify-between items-center py-[10px] border-b border-white/[0.06] last:border-0">
-                  <span className="text-white/40 text-[11px]">{row.label}</span>
-                  <span className="text-white text-[12px] font-semibold">{row.value}</span>
+                <div key={row.label} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+                  <span className="text-white/40 text-xs">{row.label}</span>
+                  <span className="text-white text-xs font-semibold">{row.value}</span>
                 </div>
               ))}
             </div>
-            <button onClick={handleEndSession}
-              className="mt-auto w-full py-3 rounded-xl bg-red-500 text-white text-[13px] font-bold border-none cursor-pointer hover:bg-red-600 transition-all">
-              Terminer la session
-            </button>
           </div>
         )}
 
+        {/* Info sidebar for learner when active */}
+        {phase === 'active' && !isTeacher && (
+          <div className="w-56 bg-[#1A1410] border-l border-white/[0.07] flex flex-col p-4 gap-4 flex-shrink-0">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <p className="text-white/40 text-[10px] font-bold uppercase tracking-wide mb-3">Info session</p>
+              {[
+                { label: 'Durée',    value: fmt(seconds) },
+                { label: 'Rôle',     value: 'Receveur' },
+                { label: 'Réservés', value: `${session.duration} cr` },
+              ].map(row => (
+                <div key={row.label} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0">
+                  <span className="text-white/40 text-xs">{row.label}</span>
+                  <span className="text-white text-xs font-semibold">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   )

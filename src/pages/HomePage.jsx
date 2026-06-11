@@ -1,545 +1,393 @@
-// src/pages/HomePage.jsx
-// Page d'accueil complète — Hero, How it works, Matches, Feed
-// Les données sont en dur pour l'instant — Dev 2 les remplacera par de vrais appels API
- 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import Footer from '../components/Footer'
 import useAuthStore from '../store/authStore'
- 
-// ─── DONNÉES (temporaires — seront remplacées par l'API) ───────────────────
-const MATCHES = [
-  {
-    id: 'la', initials: 'LA', color: '#252840',
-    name: 'Léa Arnaud', meta: 'Paris · 19 y.o. · Available now',
-    teaches: [{ label: 'Maths', style: 'sand' }, { label: 'Piano', style: 'sand' }],
-    learns:  [{ label: 'English', style: 'night' }],
-    score: 92,
-  },
-  {
-    id: 'km', initials: 'KM', color: '#C8864B',
-    name: 'Kenji Matsuda', meta: 'Lyon · 22 y.o. · Available now',
-    teaches: [{ label: 'Japanese', style: 'warm' }, { label: 'Design', style: 'warm' }],
-    learns:  [{ label: 'French', style: 'sage' }],
-    score: 78,
-  },
-  {
-    id: 'so', initials: 'SO', color: '#3D5C28',
-    name: 'Sara Okonkwo', meta: 'Marseille · 20 y.o. · Available now',
-    teaches: [{ label: 'English', style: 'sage' }, { label: 'Cooking', style: 'sage' }],
-    learns:  [{ label: 'Spanish', style: 'night' }],
-    score: 71,
-  },
-]
- 
-const POSTS = [
-  {
-    id: 1, initials: 'LA', color: '#252840',
-    author: 'Léa Arnaud', time: '2h ago',
-    text: 'First math session — finally understood derivatives! Thank you SkillBridge.',
-    tags: [{ label: 'Maths', style: 'sand' }, { label: 'Session', style: 'night' }],
-    likes: 24, comments: 5,
-  },
-  {
-    id: 2, initials: 'KM', color: '#C8864B',
-    author: 'Kenji Matsuda', time: '5h ago',
-    text: 'Learned homemade ramen in exchange for a Japanese lesson. Best deal ever.',
-    tags: [{ label: 'Japanese', style: 'warm' }, { label: 'Cooking', style: 'warm' }],
-    likes: 41, comments: 12,
-  },
-  {
-    id: 3, initials: 'SO', color: '#3D5C28',
-    author: 'Sara Okonkwo', time: 'Yesterday',
-    text: '60 credits earned this week — 3 English sessions given. Love this system!',
-    tags: [{ label: 'English', style: 'sage' }, { label: 'Credits', style: 'sage' }],
-    likes: 18, comments: 3,
-  },
-  {
-    id: 4, initials: 'TR', color: '#363B6B',
-    author: 'Thomas R.', time: '2 days ago',
-    text: 'Matched with 3 people this week. Group learning is something else — highly recommended.',
-    tags: [{ label: 'Match x3', style: 'night' }],
-    likes: 33, comments: 7,
-  },
-  {
-    id: 5, initials: 'AM', color: '#B07030',
-    author: 'Amira M.', time: '3 days ago',
-    text: 'Taught Arabic calligraphy, learned guitar chords. This platform is genuinely magic.',
-    tags: [{ label: 'Arabic', style: 'warm' }, { label: 'Guitar', style: 'sand' }],
-    likes: 56, comments: 9,
-  },
-]
- 
-// ─── STYLE DES TAGS ────────────────────────────────────────────────────────
-const tagStyles = {
-  sand:  'bg-[#FAF5E8]  text-[#3D3020] border border-[rgba(223,192,128,0.5)]',
-  night: 'bg-[#ECEEF8]  text-[#252840]',
-  sage:  'bg-[#E4EED8]  text-[#3D5C28]',
-  warm:  'bg-[#F8EDD8]  text-[#8C5A1E]',
-}
- 
-function Tag({ label, style }) {
-  return (
-    <span className={`px-[11px] py-1 rounded-full text-xs font-semibold ${tagStyles[style] ?? tagStyles.sand}`}>
-      {label}
-    </span>
-  )
-}
- 
-// ─── CAROUSEL ──────────────────────────────────────────────────────────────
-// Les 4 images Gemini que tu as générées — à mettre dans public/
+
 const HERO_IMAGES = [
-  { src: '/hero-1.png', alt: 'SkillBridge — exchange skills' },
-  { src: '/hero-2.png', alt: 'Video call learning session' },
-  { src: '/hero-3.png', alt: 'Find your match on mobile' },
-  { src: '/hero-4.png', alt: 'Match found — grow together' },
+  { src: '/Hero principal.png',  skill: 'Guitare · Piano · Musique' },
+  { src: '/Hero slide 2.png',    skill: 'React · JavaScript · Code' },
+  { src: '/Hero slide 3.png',    skill: 'Langues · Design · Marketing' },
 ]
- 
-function HeroCarousel() {
-  const [current, setCurrent] = useState(0)
-  const total = HERO_IMAGES.length
- 
-  const goTo = (i) => setCurrent((i + total) % total)
- 
-  // Auto-avance toutes les 4 secondes
-  useEffect(() => {
-    const timer = setInterval(() => goTo(current + 1), 4000)
-    return () => clearInterval(timer)
-  }, [current])
- 
-  return (
-    <div className="relative w-full h-full overflow-hidden bg-[#FAF5E8]">
-      {/* Slides */}
-      <div
-        className="flex h-full transition-transform duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-        style={{ transform: `translateX(-${current * 100}%)` }}
-      >
-        {HERO_IMAGES.map((img, i) => (
-          <div key={i} className="min-w-full h-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img src={img.src} alt={img.alt} className="w-full h-full object-cover object-center" />
-          </div>
-        ))}
-      </div>
- 
-      {/* Flèches */}
-      <button
-        onClick={() => goTo(current - 1)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-[38px] h-[38px] rounded-full bg-[rgba(248,244,234,0.88)] border-none cursor-pointer flex items-center justify-center z-10 backdrop-blur-sm hover:bg-white transition-all"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-      <button
-        onClick={() => goTo(current + 1)}
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-[38px] h-[38px] rounded-full bg-[rgba(248,244,234,0.88)] border-none cursor-pointer flex items-center justify-center z-10 backdrop-blur-sm hover:bg-white transition-all"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
- 
-      {/* Dots */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 flex gap-[7px] z-10">
-        {HERO_IMAGES.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => goTo(i)}
-            className={`w-[7px] h-[7px] rounded-full border-none cursor-pointer transition-all ${
-              i === current ? 'bg-[#252840] scale-110' : 'bg-[rgba(26,20,16,0.25)]'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
- 
-// ─── TINDER CARDS ─────────────────────────────────────────────────────────
-function MatchCards() {
-  // positions : 0 = dessus (centré), 1 = derrière à droite, 2 = derrière à gauche
-  const [positions, setPositions] = useState([0, 1, 2])
-  const [animatingOut, setAnimatingOut] = useState(null) // { index, direction }
- 
-  const getStyle = (pos) => {
-    if (pos === 0) return {
-      transform: 'translateX(-50%) rotate(0deg)',
-      zIndex: 3, opacity: 1,
-      boxShadow: '0 8px 40px rgba(26,20,16,0.12)',
-      pointerEvents: 'all',
-      transition: 'transform 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.45s',
-    }
-    if (pos === 1) return {
-      transform: 'translateX(-34%) rotate(4deg)',
-      zIndex: 2, opacity: 0.75,
-      boxShadow: '0 4px 20px rgba(26,20,16,0.07)',
-      pointerEvents: 'none',
-      transition: 'transform 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.45s',
-    }
-    return {
-      transform: 'translateX(-66%) rotate(-4deg)',
-      zIndex: 1, opacity: 0.5,
-      boxShadow: '0 2px 10px rgba(26,20,16,0.04)',
-      pointerEvents: 'none',
-      transition: 'transform 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.45s',
-    }
-  }
- 
-  const swipe = () => {
-    // Trouver la carte du dessus (pos === 0)
-    const topIndex = positions.indexOf(0)
-    // Direction aléatoire
-    const dir = Math.random() > 0.5 ? 1 : -1
- 
-    setAnimatingOut({ index: topIndex, dir })
- 
-    setTimeout(() => {
-      setAnimatingOut(null)
-      // Rotation des positions : 0→2, 1→0, 2→1
-      setPositions(prev => prev.map(p => (p - 1 + 3) % 3))
-    }, 440)
-  }
- 
-  return (
-    <div className="relative h-[340px] flex items-center justify-center overflow-visible mb-6">
-      {MATCHES.map((match, i) => {
-        const pos = positions[i]
-        const isAnimOut = animatingOut?.index === i
-        const outDir = animatingOut?.dir ?? 1
- 
-        const style = isAnimOut
-          ? {
-              transform: `translateX(${outDir > 0 ? '150%' : '-150%'}) rotate(${outDir > 0 ? '18deg' : '-18deg'})`,
-              zIndex: 10, opacity: 0,
-              transition: 'transform 0.42s cubic-bezier(0.4,0,0.2,1), opacity 0.42s',
-              pointerEvents: 'none',
-            }
-          : getStyle(pos)
- 
-        return (
-          <div
-            key={match.id}
-            style={{ ...style, position: 'absolute', left: '50%', width: '580px', maxWidth: 'calc(100vw - 24px)' }}
-            className="bg-[#FDFAF4] border border-black/[0.09] rounded-[20px] px-9 py-8 flex items-center gap-6"
-          >
-            {/* Avatar */}
-            <div
-              className="w-[72px] h-[72px] rounded-full flex items-center justify-center font-black text-[26px] text-white flex-shrink-0"
-              style={{ background: match.color }}
-            >
-              {match.initials}
-            </div>
- 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="text-xl font-extrabold tracking-tight text-[#1A1410]">{match.name}</div>
-              <div className="text-xs text-[#7A6E5C] mt-[3px]">{match.meta}</div>
- 
-              <div className="flex gap-4 mt-4 flex-wrap">
-                <div>
-                  <div className="text-[10px] font-bold tracking-[0.8px] uppercase text-[#7A6E5C] mb-[5px]">Teaches</div>
-                  <div className="flex gap-[5px] flex-wrap">
-                    {match.teaches.map(t => <Tag key={t.label} {...t} />)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold tracking-[0.8px] uppercase text-[#7A6E5C] mb-[5px]">Wants to learn</div>
-                  <div className="flex gap-[5px] flex-wrap">
-                    {match.learns.map(t => <Tag key={t.label} {...t} />)}
-                  </div>
-                </div>
-              </div>
- 
-              {/* Barre de match */}
-              <div className="flex items-center gap-[10px] mt-4">
-                <div className="flex-1 h-[5px] bg-[#EDE8DE] rounded-full">
-                  <div className="h-full bg-[#252840] rounded-full" style={{ width: `${match.score}%` }} />
-                </div>
-                <div className="text-[13px] font-bold text-[#252840] min-w-[80px] text-right">
-                  {match.score}% match
-                </div>
-              </div>
-            </div>
- 
-            {/* Boutons */}
-            <div className="flex flex-col gap-[10px] flex-shrink-0">
-              <button
-                onClick={swipe}
-                className="px-[26px] py-[13px] rounded-[10px] border-none bg-[#252840] text-white text-[13px] font-bold cursor-pointer hover:bg-[#363B6B] transition-all whitespace-nowrap font-inter"
-              >
-                Connect
-              </button>
-              <button
-                onClick={swipe}
-                className="px-[26px] py-3 rounded-[10px] border-[1.5px] border-black/[0.09] bg-transparent text-[#7A6E5C] text-[13px] font-semibold cursor-pointer hover:border-[#1A1410] hover:text-[#1A1410] transition-all whitespace-nowrap font-inter"
-              >
-                Skip
-              </button>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
- 
-// ─── FEED SCROLLABLE ───────────────────────────────────────────────────────
-function FeedScroll() {
-  const trackRef = useRef(null)
- 
-  const scroll = (dir) => {
-    trackRef.current?.scrollBy({ left: dir * 312, behavior: 'smooth' })
-  }
- 
-  return (
-    <>
-      <div
-        ref={trackRef}
-        className="flex gap-4 overflow-x-auto pb-4 [scroll-snap-type:x_mandatory] [scrollbar-width:none] [-ms-overflow-style:none]"
-        style={{ scrollbarWidth: 'none' }}
-      >
-        {POSTS.map(post => (
-          <div
-            key={post.id}
-            className="bg-[#FDFAF4] border border-black/[0.09] rounded-2xl overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg flex-shrink-0 w-[280px] [scroll-snap-align:start]"
-          >
-            {/* Thumbnail illustrée */}
-            <div className="h-[148px] flex items-center justify-center bg-[#EEEADE]">
-              <PostIllustration index={post.id} />
-            </div>
-            <div className="p-[14px] flex flex-col gap-2">
-              {/* Auteur */}
-              <div className="flex gap-2 items-center">
-                <div
-                  className="w-[26px] h-[26px] rounded-full text-[10px] font-bold text-white flex items-center justify-center flex-shrink-0"
-                  style={{ background: post.color }}
-                >
-                  {post.initials}
-                </div>
-                <span className="text-[12.5px] font-semibold text-[#1A1410]">{post.author}</span>
-                <span className="text-[10px] text-[#7A6E5C] ml-auto">{post.time}</span>
-              </div>
-              <p className="text-[13px] text-[#3D3020] leading-[1.5]">{post.text}</p>
-              <div className="flex gap-[5px] flex-wrap">
-                {post.tags.map(t => <Tag key={t.label} label={t.label} style={t.style} />)}
-              </div>
-              <div className="flex gap-3">
-                <span className="flex items-center gap-1 text-[11px] text-[#7A6E5C] font-medium">
-                  <HeartIcon /> {post.likes}
-                </span>
-                <span className="flex items-center gap-1 text-[11px] text-[#7A6E5C] font-medium">
-                  <CommentIcon /> {post.comments}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
- 
-      <div className="flex gap-[10px] mt-5">
-        <button onClick={() => scroll(-1)}
-          className="px-4 py-2 rounded-lg border-[1.5px] border-black/[0.09] text-xs font-semibold text-[#1A1410] bg-transparent cursor-pointer hover:bg-[#1A1410] hover:text-white transition-all font-inter">
-          ← Previous
-        </button>
-        <button onClick={() => scroll(1)}
-          className="px-4 py-2 rounded-lg border-[1.5px] border-black/[0.09] text-xs font-semibold text-[#1A1410] bg-transparent cursor-pointer hover:bg-[#1A1410] hover:text-white transition-all font-inter">
-          Next →
-        </button>
-        <a href="/feed"
-          className="ml-auto px-[14px] py-[7px] border-[1.5px] border-[rgba(37,40,100,0.2)] rounded-lg text-xs font-bold text-[#252840] no-underline hover:bg-[#252840] hover:text-white transition-all flex-shrink-0">
-          Open feed
-        </a>
-      </div>
-    </>
-  )
-}
- 
-// ─── PAGE PRINCIPALE ───────────────────────────────────────────────────────
+
+const SKILL_PILLS = ['Guitare', 'React', 'Anglais', 'Piano', 'Photographie', 'Cuisine', 'Design', 'Yoga']
+
+const EXCHANGES = [
+  { img: '/Guitare ↔ Dev.png',       title: 'Guitare ↔ Dev Web',    text: 'Échanger ses accords contre du code.' },
+  { img: '/Cuisine ↔ Photo.png',     title: 'Cuisine ↔ Photo',      text: 'Apprendre à capturer des images contre des recettes.' },
+  { img: '/Langues ↔ Marketing.png', title: 'Langues ↔ Marketing',  text: "Pratique l'anglais, découvre le marketing digital." },
+]
+
+const feedPosts = [
+  { color:'#252840', initials:'LA', author:'Léa Arnaud',    handle:'@lea_arnaud',
+    text:"Première session de maths — j'ai enfin compris les dérivées ! Merci SkillBridge.",
+    tags:['Maths','Session'],   time:'Il y a 2h' },
+  { color:'#C8864B', initials:'KM', author:'Kenji Matsuda', handle:'@kenji_m',
+    text:"Appris le ramen maison en échange d'une leçon de japonais. Le meilleur deal possible.",
+    tags:['Japonais','Cuisine'], time:'Il y a 5h' },
+  { color:'#3D5C28', initials:'SO', author:'Sara Okonkwo',  handle:'@sara_o',
+    text:"60 crédits gagnés cette semaine — 3 sessions d'anglais données. J'adore ce système !",
+    tags:['Anglais','Crédits'], time:'Hier' },
+  { color:'#363B6B', initials:'TR', author:'Thomas R.',     handle:'@thomas_r',
+    text:"Matché avec 3 personnes cette semaine. L'apprentissage en groupe c'est autre chose.",
+    tags:['Match','Groupe'],    time:'Il y a 2j' },
+  { color:'#B07030', initials:'AM', author:'Amira M.',      handle:'@amira_m',
+    text:"Enseigné la calligraphie arabe, appris des accords de guitare. Cette plateforme est magique.",
+    tags:['Arabe','Guitare'],   time:'Il y a 3j' },
+  { color:'#252840', initials:'YB', author:'Yanis B.',      handle:'@yanis_b',
+    text:"React appris en 2 semaines grâce à un échange avec Marc. On continue sur TypeScript.",
+    tags:['React','Code'],      time:'Il y a 4j' },
+]
+
 export default function HomePage() {
   const { openModal } = useAuthStore()
- 
+  const navigate = useNavigate()
+  const [idx,    setIdx]    = useState(0)
+  const [paused, setPaused] = useState(false)
+
+  useEffect(() => {
+    const t = setInterval(() => setIdx(i => (i + 1) % HERO_IMAGES.length), 4000)
+    return () => clearInterval(t)
+  }, [])
+
   return (
     <main>
-      {/* ── HERO ── */}
-      <section className="pt-[62px] min-h-screen flex flex-col md:grid md:grid-cols-2 overflow-hidden">
- 
-        {/* Gauche — texte */}
-        <div className="px-6 md:px-20 py-12 md:py-[72px] flex flex-col justify-center gap-7 md:gap-9">
-          {/* Titre 3D Inter 900 */}
-          <h1 className="font-black text-[clamp(36px,8vw,92px)] leading-[1.0] tracking-[-2px] md:tracking-[-3px] text-[#1A1410] pb-[6px]">
-            <span className="block">
-              Teach<span className="inline-block w-[0.22em]" />
-              <span className="text-[#C8864B]">what</span>
-            </span>
-            <span className="block">
-              <span className="text-[#C8864B]">you</span>
-              <span className="inline-block w-[0.22em]" />
-              <span className="text-[#252840]">know.</span>
-            </span>
-            <span className="block">
-              Learn<span className="inline-block w-[0.22em]" />
-              <span className="text-[#252840]">what</span>
-            </span>
-            <span className="block">
-              <span className="text-[#C8864B]">you</span>
-              <span className="inline-block w-[0.22em]" />
-              love.
-            </span>
+
+      {/* ── HERO PLEIN ÉCRAN ── */}
+      <section className="relative min-h-screen overflow-hidden flex items-center justify-center">
+
+        {HERO_IMAGES.map((img, i) => (
+          <div key={i} className={`absolute inset-0 transition-opacity duration-1000 ${i === idx ? 'opacity-100' : 'opacity-0'}`}>
+            <img src={img.src} alt="" className="w-full h-full object-cover" />
+          </div>
+        ))}
+
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/70" />
+
+        <div className="relative z-10 text-center text-white max-w-4xl mx-auto px-6 py-20">
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-tight mb-6">
+            Teach what you know.<br />
+            <span className="text-[#C8864B]">Learn what you love.</span>
           </h1>
- 
-          <p className="text-[16px] leading-[1.68] text-[#7A6E5C] max-w-[380px]">
-            Good at math, want to learn English?<br/>
-            SkillBridge connects you with someone who<br/>
-            <strong className="text-[#1A1410] font-bold">teaches what you need</strong> and{' '}
-            <strong className="text-[#1A1410] font-bold">needs what you teach</strong> .<br/>
-            no numbers, no socials shared.
+
+          <p className="text-lg text-white/80 max-w-xl mx-auto mb-8">
+            Partage ton savoir, apprends ce qui te passionne.
+            Pas d'argent — juste des crédits et une communauté qui s'entraide.
           </p>
- 
-          <div className="flex gap-3 items-center">
-            <button
-              onClick={() => openModal('register')}
-              className="px-[30px] py-[14px] rounded-[10px] border-none bg-[#252840] text-white text-[15px] font-bold cursor-pointer hover:bg-[#363B6B] hover:-translate-y-[2px] hover:shadow-[0_8px_28px_rgba(37,40,64,0.24)] transition-all font-inter"
-            >
-              Find my match
-            </button>
-            <button className="px-6 py-[14px] rounded-[10px] border-[1.5px] border-black/[0.09] text-[15px] font-semibold text-[#1A1410] bg-transparent cursor-pointer hover:border-[#1A1410] transition-all font-inter">
-              How it works
-            </button>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <Link to="/connection"
+              className="px-8 py-4 rounded-full bg-[#C8864B] text-white font-bold text-lg no-underline hover:bg-[#B07030] transition-colors">
+              Trouver quelqu'un à qui apprendre
+            </Link>
+            <Link to="/profile"
+              className="px-8 py-4 rounded-full border-2 border-white/60 text-white font-bold text-lg no-underline backdrop-blur-sm hover:bg-white/10 transition-colors">
+              Proposer mes compétences
+            </Link>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-2">
+            {SKILL_PILLS.map(s => (
+              <span key={s} className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm text-white/80 text-sm border border-white/20">
+                {s}
+              </span>
+            ))}
           </div>
         </div>
- 
-        {/* Droite — carousel (caché sur mobile) */}
-        <div className="hidden md:block relative overflow-hidden bg-[#FAF5E8]">
-          <HeroCarousel />
-        </div>
-      </section>
- 
-      {/* ── HOW IT WORKS ── */}
-      <section className="bg-[#1A1410] px-6 md:px-20 py-12 md:py-20" id="how">
-        <p className="text-[11px] font-bold tracking-[1.5px] uppercase text-[#C8864B] mb-3">How it works</p>
-        <h2 className="text-[38px] font-black tracking-[-1.5px] text-white leading-[1.05] mb-14">
-          Four steps to your<br/>first skill exchange.
-        </h2>
- 
-        <div className="flex flex-col divide-y divide-white/[0.07]">
-          {[
-            {
-              num: '01', title: 'Build your profile', img: '/how-1.png', alt: 'Build profile',
-              desc: 'Add the skills you can teach and the ones you want to learn. Set your availability and write a short bio. The more complete your profile, the better your matches.',
-              right: false,
-            },
-            {
-              num: '02', title: 'Get matched', img: '/how-2.png', alt: 'Get matched',
-              desc: 'Our algorithm finds people whose skills perfectly mirror yours. You can even match in a group of three — A teaches B, B teaches C, C teaches A.',
-              right: true,
-            },
-            {
-              num: '03', title: 'Chat and learn', img: '/how-3.png', alt: 'Chat and learn',
-              desc: 'Connect by text or voice call — entirely inside SkillBridge. No phone numbers, no Instagram handles. Everything stays on the platform, always.',
-              right: false,
-            },
-            {
-              num: '04', title: 'Earn credits & grow', img: '/how-4.png', alt: 'Earn credits',
-              desc: 'Every session you teach earns credits. Use those credits to learn. Rate each other, earn badges, and build a reputation that attracts better matches.',
-              right: true,
-            },
-          ].map((step) => (
-            <div
-              key={step.num}
-              className={`grid grid-cols-1 md:grid-cols-2 overflow-hidden ${step.right ? 'md:[direction:rtl]' : ''}`}
-            >
-              <div className={`hidden md:flex relative min-h-[320px] items-center justify-center bg-white/[0.03] overflow-hidden ${step.right ? '[direction:ltr]' : ''}`}>
-                <span className="absolute top-5 left-5 text-[11px] font-bold tracking-[1px] uppercase text-white/35 bg-white/[0.06] px-[10px] py-1 rounded-full">
-                  Step {step.num}
-                </span>
-                <img src={step.img} alt={step.alt} className="w-full h-full object-cover opacity-[0.92]" />
-              </div>
-              <div className={`px-12 py-[52px] flex flex-col justify-center gap-4 ${step.right ? '[direction:ltr]' : ''}`}>
-                <div className="text-[64px] font-black tracking-[-3px] text-white/[0.05] leading-none -mb-2">{step.num}</div>
-                <h3 className="text-[26px] font-black tracking-[-0.8px] text-white">{step.title}</h3>
-                <p className="text-[14.5px] text-white/[0.48] leading-[1.7] max-w-[380px]">{step.desc}</p>
-              </div>
-            </div>
+
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+          {HERO_IMAGES.map((_, i) => (
+            <button key={i} onClick={() => setIdx(i)}
+              className={`h-2 rounded-full transition-all border-none cursor-pointer ${i === idx ? 'w-8 bg-[#C8864B]' : 'w-2 bg-white/40'}`} />
           ))}
         </div>
       </section>
- 
-      {/* ── YOUR MATCHES TODAY ── */}
-      <section className="px-6 md:px-20 py-12 md:py-[72px]" id="matches">
-        <div className="flex items-end justify-between gap-5 mb-9">
-          <div>
-            <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Suggested for you</p>
-            <h2 className="text-[32px] font-black tracking-[-1.2px] text-[#1A1410] leading-[1.05]">
-              Your <span className="text-[#252840]">matches</span> today
+
+      {/* ── COMMENT ÇA MARCHE — style HappyRobot ── */}
+      <section className="py-24 bg-[#F8F4EA]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+
+            {/* Colonne gauche — texte + étapes */}
+            <div>
+              <span className="text-sm font-bold uppercase tracking-widest text-[#C8864B]">
+                Comment ça marche
+              </span>
+              <h2 className="mt-3 text-4xl md:text-5xl font-black text-[#252840] tracking-tight leading-tight">
+                Trois étapes pour<br/>ton premier échange.
+              </h2>
+
+              <div className="mt-10 flex flex-col gap-8">
+                {[
+                  {
+                    num: '01',
+                    title: 'Crée ton profil',
+                    text: "Ajoute les compétences que tu peux enseigner et celles que tu veux apprendre. Définis tes disponibilités du lundi au vendredi.",
+                    icon: (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                      </svg>
+                    ),
+                  },
+                  {
+                    num: '02',
+                    title: 'Trouve et réserve',
+                    text: "Notre algorithme trouve les membres dont les compétences correspondent aux tiennes. Consulte leurs disponibilités et envoie une demande de réservation.",
+                    icon: (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="M21 21l-4-4"/>
+                      </svg>
+                    ),
+                  },
+                  {
+                    num: '03',
+                    title: 'Vis la session',
+                    text: "Rejoignez votre session vidéo directement dans SkillBridge. Les crédits sont calculés à la minute et transférés automatiquement à la fin.",
+                    icon: (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
+                        <rect x="2" y="6" width="15" height="12" rx="3"/>
+                        <path d="M17 10l5-3v10l-5-3"/>
+                      </svg>
+                    ),
+                  },
+                ].map((step, i) => (
+                  <div key={step.num} className="flex gap-5">
+                    <div className="flex flex-col items-center">
+                      <div className="w-12 h-12 rounded-2xl bg-[#C8864B] flex items-center justify-center flex-shrink-0">
+                        {step.icon}
+                      </div>
+                      {i < 2 && (
+                        <div className="w-px flex-1 bg-[#C8864B]/20 mt-3 min-h-[2rem]" />
+                      )}
+                    </div>
+                    <div className="pb-6">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-xs font-bold text-[#C8864B] uppercase tracking-wider">{step.num}</span>
+                        <h3 className="text-lg font-black text-[#252840]">{step.title}</h3>
+                      </div>
+                      <p className="text-[#7A6E5C] leading-relaxed text-sm">{step.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Colonne droite — diagramme visuel */}
+            <div className="relative">
+              <div className="relative mx-auto w-full max-w-md" style={{ height: '400px' }}>
+
+                {/* Carte centrale */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-48 h-48 rounded-3xl bg-[#252840] flex flex-col items-center justify-center shadow-2xl">
+                  <img src="/sk.png" alt="SkillBridge" className="h-16 w-16 object-contain" />
+                  <p className="text-white font-black text-sm mt-2">SkillBridge</p>
+                  <p className="text-white/50 text-xs">Plateforme</p>
+                </div>
+
+                {/* 4 cartes satellites */}
+                {[
+                  { style: { top: '10px',  left: '10px'  }, label: 'Profil',   sublabel: 'Skills · Dispo',
+                    icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round"><circle cx="10" cy="7" r="3.5"/><path d="M3 18c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg> },
+                  { style: { top: '10px',  right: '10px' }, label: 'Matching', sublabel: 'IA · Compatible',
+                    icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round"><circle cx="9" cy="9" r="6"/><path d="M17 17l-3-3"/></svg> },
+                  { style: { bottom: '10px', left: '10px'  }, label: 'Session', sublabel: 'Vidéo · Live',
+                    icon: <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round"><rect x="2" y="5" width="12" height="10" rx="2"/><path d="M14 8.5l4-2.5v8l-4-2.5"/></svg> },
+                  { style: { bottom: '10px', right: '10px' }, label: 'Crédits', sublabel: 'Auto · Sécurisé',
+                    icon: <img src="/credit-coin-gold.png" alt="cr" className="h-5 w-5 object-contain" /> },
+                ].map((node, i) => (
+                  <div key={i} className="absolute w-36 rounded-2xl border border-black/[0.09] bg-white p-4 shadow-md" style={node.style}>
+                    <div className="w-10 h-10 rounded-xl bg-[#F8F4EA] flex items-center justify-center mb-2">
+                      {node.icon}
+                    </div>
+                    <p className="text-sm font-bold text-[#252840]">{node.label}</p>
+                    <p className="text-xs text-[#7A6E5C]">{node.sublabel}</p>
+                  </div>
+                ))}
+
+                {/* Lignes de connexion SVG */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} viewBox="0 0 400 400">
+                  <line x1="100" y1="100" x2="200" y2="200" stroke="#C8864B" strokeWidth="1.5" strokeDasharray="5 5" opacity="0.5"/>
+                  <line x1="300" y1="100" x2="200" y2="200" stroke="#C8864B" strokeWidth="1.5" strokeDasharray="5 5" opacity="0.5"/>
+                  <line x1="100" y1="300" x2="200" y2="200" stroke="#C8864B" strokeWidth="1.5" strokeDasharray="5 5" opacity="0.5"/>
+                  <line x1="300" y1="300" x2="200" y2="200" stroke="#C8864B" strokeWidth="1.5" strokeDasharray="5 5" opacity="0.5"/>
+                </svg>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── ÉCHANGES POPULAIRES ── */}
+      <section className="py-20 bg-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+
+          <div className="text-center mb-12">
+            <span className="text-sm font-bold uppercase tracking-widest text-[#C8864B]">
+              Échanges populaires
+            </span>
+            <h2 className="mt-3 text-4xl font-black tracking-tight text-[#252840]">
+              Ce que les membres échangent
             </h2>
-            <p className="text-[14px] text-[#7A6E5C] leading-[1.65] max-w-[420px] mt-[5px]">
-              Profiles selected based on your skills and what you want to learn.
+            <p className="mt-2 text-[#7A6E5C] max-w-2xl mx-auto text-center">
+              Chaque échange est unique. Un guitariste apprend React,
+              un développeur apprend la cuisine. C'est ça, SkillBridge.
             </p>
           </div>
-          <a href="/match"
-            className="text-xs font-bold text-[#252840] no-underline whitespace-nowrap px-[14px] py-[7px] border-[1.5px] border-[rgba(37,40,100,0.2)] rounded-lg hover:bg-[#252840] hover:text-white transition-all flex-shrink-0">
-            Browse all profiles
-          </a>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {EXCHANGES.map(card => (
+              <div key={card.title}
+                className="relative overflow-hidden rounded-3xl h-80 group cursor-pointer">
+                <img src={card.img} alt={card.title}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                  <h3 className="text-xl font-black mb-1">{card.title}</h3>
+                  <p className="text-white/80 text-sm">{card.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
- 
-        <MatchCards />
       </section>
- 
-      <div className="h-px bg-black/[0.09] mx-6 md:mx-20" />
- 
-      {/* ── WHAT MEMBERS SHARE ── */}
-      <section className="px-6 md:px-20 py-12 md:py-[72px]" id="feed">
-        <div className="flex items-end justify-between gap-5 mb-9">
-          <div>
-            <p className="text-[11px] font-bold tracking-[1.2px] uppercase text-[#C8864B] mb-2">Community</p>
-            <h2 className="text-[32px] font-black tracking-[-1.2px] text-[#1A1410] leading-[1.05]">
-              What members <span className="text-[#252840]">share</span>
+
+      {/* ── SUCCESS STORIES ── */}
+      <section className="py-20 bg-[#F8F4EA]">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+
+          <div className="text-center mb-12">
+            <span className="text-sm font-bold uppercase tracking-widest text-[#C8864B]">
+              Ils l'ont fait
+            </span>
+            <h2 className="mt-3 text-4xl font-black tracking-tight text-[#252840]">
+              Success stories
             </h2>
-            <p className="text-[14px] text-[#7A6E5C] leading-[1.65] max-w-[420px] mt-[5px]">
-              Progress, tips and discoveries from the SkillBridge community.
+            <p className="mt-2 text-[#7A6E5C] max-w-2xl mx-auto text-center">
+              Ils ont osé partager leur savoir. Aujourd'hui, ils maîtrisent
+              de nouvelles compétences grâce à la communauté.
             </p>
           </div>
-          <a href="/feed"
-            className="text-xs font-bold text-[#252840] no-underline whitespace-nowrap px-[14px] py-[7px] border-[1.5px] border-[rgba(37,40,100,0.2)] rounded-lg hover:bg-[#252840] hover:text-white transition-all flex-shrink-0">
-            Open feed
-          </a>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              {
+                img: '/success_stories1.png', name: 'Alex',
+                skill: 'Piano',
+                story: "A appris le piano grâce à 120 crédits offerts à l'inscription. En 6 sessions, il joue ses premières mélodies.",
+                credits: '120 cr utilisés',
+                sessions: '6 sessions',
+              },
+              {
+                img: '/success_stories2.png', name: 'Sarah',
+                skill: 'Design UI',
+                story: "A obtenu des cours de design en échange de cours d'anglais. Elle a redesigné son portfolio en 3 semaines.",
+                credits: '180 cr échangés',
+                sessions: '8 sessions',
+              },
+              {
+                img: '/success_stories3.png', name: 'Marc',
+                skill: 'React',
+                story: "A appris React contre des cours de guitare en 3 semaines. Il a déployé sa première app en production.",
+                credits: '240 cr échangés',
+                sessions: '10 sessions',
+              },
+            ].map(story => (
+              <div key={story.name} className="flex flex-col rounded-3xl overflow-hidden border border-black/[0.09] shadow-sm hover:-translate-y-1 transition-transform bg-white">
+                <div className="h-72 overflow-hidden">
+                  <img src={story.img} alt={story.name}
+                    className="w-full h-full object-cover object-center" />
+                </div>
+                <div className="p-6 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-black text-[#252840] text-xl">{story.name}</p>
+                    <span className="px-3 py-1 rounded-full bg-[#E4EED8] text-[#3D5C28] text-xs font-bold">{story.skill}</span>
+                  </div>
+                  <p className="text-[#7A6E5C] text-sm leading-relaxed">{story.story}</p>
+                  <div className="flex gap-4 pt-2 border-t border-black/[0.06]">
+                    <div className="flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#C8864B" strokeWidth="1.8" strokeLinecap="round">
+                        <circle cx="7" cy="7" r="5.5"/>
+                        <path d="M7 4v3l2 1"/>
+                      </svg>
+                      <span className="text-xs text-[#7A6E5C] font-medium">{story.sessions}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <img src="/credit-coin-gold.png" alt="crédits" className="h-4 w-4 object-contain" />
+                      <span className="text-xs text-[#7A6E5C] font-medium">{story.credits}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
- 
-        <FeedScroll />
       </section>
- 
+
+      {/* ── COMMUNAUTÉ — carrousel infini ── */}
+      <section className="py-20 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6 mb-10">
+          <div className="flex items-end justify-between">
+            <div>
+              <span className="text-sm font-bold uppercase tracking-widest text-[#C8864B]">
+                La communauté
+              </span>
+              <h2 className="mt-3 text-4xl font-black text-[#252840] tracking-tight">
+                Ce qui se passe maintenant
+              </h2>
+              <p className="mt-2 text-[#7A6E5C] max-w-md">
+                Des milliers d'échanges ont lieu chaque semaine sur SkillBridge.
+                Voici ce que partagent les membres.
+              </p>
+            </div>
+            <a href="/connection" className="hidden md:flex items-center gap-2 px-5 py-2 rounded-full border-2 border-[#252840] text-[#252840] font-bold no-underline hover:bg-[#252840] hover:text-white transition-all">
+              Découvrir
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 8h10M9 4l4 4-4 4"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        {/* Carrousel infini */}
+        <div
+          className="flex gap-5 w-max"
+          style={{ animation: paused ? 'none' : 'scroll-left 30s linear infinite' }}
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+        >
+          {[...feedPosts, ...feedPosts].map((post, i) => (
+            <article key={i} className="w-80 flex-shrink-0 rounded-3xl border border-black/[0.09] bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
+                  style={{ backgroundColor: post.color }}>
+                  {post.initials}
+                </div>
+                <div>
+                  <p className="font-bold text-[#252840] text-sm">{post.author}</p>
+                  <p className="text-xs text-[#7A6E5C]">{post.handle}</p>
+                </div>
+              </div>
+              <p className="text-[#3D3020] text-sm leading-relaxed mb-4">{post.text}</p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {post.tags.map(tag => (
+                  <span key={tag} className="px-2 py-1 rounded-full bg-[#E4EED8] text-[#3D5C28] text-xs font-semibold">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[#7A6E5C] border-t border-black/[0.06] pt-3">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <path d="M1 6h12M8 2l4 4-4 4"/>
+                </svg>
+                <span>{post.time}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <Footer />
     </main>
-  )
-}
- 
-// ─── PETITES ILLUSTRATIONS SVG pour les posts ─────────────────────────────
-function PostIllustration({ index }) {
-  const bgs = ['#EEEADE','#F2E8D2','#E6F0DA','#EAE6F5','#FAF0E2']
-  const bg = bgs[(index - 1) % bgs.length]
-  return (
-    <div style={{ background: bg, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="88" height="88" viewBox="0 0 88 88" fill="none">
-        <rect x="14" y="16" width="42" height="52" rx="5" fill="#D4C9A0" opacity=".4"/>
-        <path d="M22 33h26M22 42h20M22 51h24" stroke="#3D3020" strokeWidth="2" strokeLinecap="round"/>
-        <circle cx="66" cy="64" r="13" fill="#3D5C28" opacity=".14"/>
-        <path d="M62 64l3.5 3.5 6.5-6.5" stroke="#3D5C28" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    </div>
-  )
-}
- 
-function HeartIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M7 12s-6-3.5-6-7a3 3 0 016 0 3 3 0 016 0c0 3.5-6 7-6 7z" strokeLinejoin="round"/>
-    </svg>
-  )
-}
- 
-function CommentIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M1 1h12v8H8l-1 4-1-4H1z" strokeLinejoin="round"/>
-    </svg>
   )
 }
