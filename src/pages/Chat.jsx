@@ -3,6 +3,7 @@ import useAuthStore from '../store/authStore'
 import { convApi, getApiError } from '../services/api'
 import api from '../services/api'
 import { useToast } from '../components/Toast'
+import { FILE_UPLOAD_ENABLED } from '../config/features'
 
 const CLOUDINARY_URL    = 'https://api.cloudinary.com/v1_1/derho2rib/auto/upload'
 const CLOUDINARY_PRESET = 'skillbridge_avatars'
@@ -146,6 +147,7 @@ export default function Chat() {
   const uploadFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file || !activeId) return
+    if (!FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
@@ -183,6 +185,7 @@ export default function Chat() {
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file || !activeId) return
+    if (!FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
@@ -198,6 +201,7 @@ export default function Chat() {
   const handleVideoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file || !activeId) return
+    if (!FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
@@ -395,8 +399,9 @@ export default function Chat() {
 
                   <button type="button"
                     onClick={() => setShowAttach(s => !s)}
-                    disabled={uploading || !activeId}
-                    className={`h-10 w-10 rounded-full flex items-center justify-center border-none cursor-pointer transition-all flex-shrink-0 text-xl font-bold disabled:opacity-40 ${
+                    disabled={uploading || !activeId || !FILE_UPLOAD_ENABLED}
+                    title={!FILE_UPLOAD_ENABLED ? 'Bientôt disponible' : undefined}
+                    className={`h-10 w-10 rounded-full flex items-center justify-center border-none cursor-pointer transition-all flex-shrink-0 text-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed ${
                       showAttach ? 'bg-[#252840] text-white rotate-45' : 'bg-[#F8F4EA] text-[#756B5B] hover:bg-[#252840] hover:text-white'
                     }`}
                     style={{ transition: 'all 0.2s ease' }}>

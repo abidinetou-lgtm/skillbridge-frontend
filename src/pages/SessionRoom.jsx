@@ -4,6 +4,7 @@ import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import { useToast } from '../components/Toast'
 import CreditIcon from '../components/CreditIcon'
+import { GROUP_SESSIONS_ENABLED } from '../config/features'
 
 const fmt = (s) =>
   `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -40,6 +41,8 @@ export default function SessionRoom() {
         myRole:           s.teacher?.id === user?.id ? 'teacher' : 'learner',
         teacherName:      `${s.teacher?.firstName ?? ''} ${s.teacher?.lastName ?? ''}`.trim(),
         studentName:      `${s.learner?.firstName ?? ''} ${s.learner?.lastName ?? ''}`.trim(),
+        teacherId:        s.teacher?.id,
+        learnerId:        s.learner?.id,
         jitsiRoomId:      s.jitsiRoomId,
         status:           s.status,
         isOpen:           s.isOpen ?? false,
@@ -131,11 +134,18 @@ export default function SessionRoom() {
 
   const submitRating = async () => {
     if (!rating || ratingSubmitted) return
+    const reviewedUserId = isTeacher ? session.learnerId : session.teacherId
+    if (!reviewedUserId) {
+      addToast?.("Impossible d'identifier le participant à noter.", 'error')
+      return
+    }
     try {
-      await api.post(`/sessions/${id}/rating`, { rating })
+      await api.post(`/sessions/${id}/rating`, { reviewedUserId, rating: Number(rating) })
       setRatingSubmitted(true)
       addToast?.('Merci pour votre évaluation !', 'success')
-    } catch (e) { console.warn('rating error:', e) }
+    } catch (e) {
+      addToast?.("Erreur lors de l'envoi de la note.", 'error')
+    }
   }
 
   const handleEndSession = async () => {
@@ -367,7 +377,7 @@ export default function SessionRoom() {
               </button>
 
               {/* Max participants */}
-              {session.isOpen && (
+              {GROUP_SESSIONS_ENABLED && session.isOpen && (
                 <div className="mb-4">
                   <p className="text-white/40 text-[10px] mb-1.5">Limite participants</p>
                   <div className="flex gap-2">
@@ -380,7 +390,7 @@ export default function SessionRoom() {
                       onClick={async () => {
                         if (!editMaxPart) return
                         try { await api.patch(`/sessions/${id}`, { maxParticipants: Number(editMaxPart) }) }
-                        catch (e) { console.warn(e) }
+                        catch (e) { addToast?.('Erreur lors de la modification de la limite.', 'error') }
                         setEditMaxPart('')
                       }}
                       className="px-2 py-1.5 rounded-lg bg-[#252840] text-white text-xs font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors flex-shrink-0">

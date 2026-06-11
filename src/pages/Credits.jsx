@@ -4,6 +4,7 @@ import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import { useToast } from '../components/Toast'
 import CreditIcon from '../components/CreditIcon'
+import { PAYMENTS_ENABLED } from '../config/features'
 
 const PACKS = [
   { id: 'starter', name: 'Starter', credits: 60,  price: 4.99,  hours: '1h',  popular: false },
@@ -54,6 +55,7 @@ export default function Credits() {
   const balance = user?.credits ?? 0
 
   const handleBuy = async (pack) => {
+    if (!PAYMENTS_ENABLED) return
     setError('')
     setBuying(pack.id)
     try {
@@ -76,7 +78,7 @@ export default function Credits() {
   }
 
   /* ── Écran de confirmation ── */
-  if (paid && paidPack) {
+  if (PAYMENTS_ENABLED && paid && paidPack) {
     return (
       <main className="min-h-screen bg-[#FDFAF4] flex items-center justify-center p-6">
         <div className="animate-fade-up w-full max-w-md rounded-3xl border border-[#E8DDC7] bg-white p-8 text-center shadow-soft">
@@ -155,7 +157,7 @@ export default function Credits() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-10">
           {PACKS.map(pack => {
             const exceeds  = balance + pack.credits > LIMIT
-            const disabled = balance >= LIMIT || exceeds || buying !== null
+            const disabled = !PAYMENTS_ENABLED || balance >= LIMIT || exceeds || buying !== null
 
             return (
               <div
@@ -191,7 +193,7 @@ export default function Credits() {
                       : 'bg-[#252840] text-white hover:bg-[#363B6B]'
                   }`}
                 >
-                  {buying === pack.id ? 'Traitement…' : exceeds || balance >= LIMIT ? 'Plafond atteint' : 'Acheter'}
+                  {!PAYMENTS_ENABLED ? 'Bientôt disponible' : buying === pack.id ? 'Traitement…' : exceeds || balance >= LIMIT ? 'Plafond atteint' : 'Acheter'}
                 </button>
               </div>
             )
@@ -209,11 +211,19 @@ export default function Credits() {
             ].map(opt => (
               <button
                 key={opt.limit}
-                onClick={() => api.post('/credits/increase-limit', { newLimit: opt.limit }).then(() => addToast?.(`Plafond augmenté à ${opt.limit} cr`, 'success')).catch(() => {})}
-                className="flex items-center justify-between rounded-2xl border border-[#E8DDC7] px-5 py-4 text-sm font-semibold text-[#252840] bg-transparent cursor-pointer hover:border-[#C8864B] hover:bg-[rgba(200,134,75,0.05)] transition-colors"
+                disabled={!PAYMENTS_ENABLED}
+                onClick={() => PAYMENTS_ENABLED && api.post('/credits/increase-limit', { newLimit: opt.limit })
+                  .then(() => addToast?.(`Plafond augmenté à ${opt.limit} cr`, 'success'))
+                  .catch(() => addToast?.("Erreur lors de l'augmentation du plafond.", 'error'))
+                }
+                className={`flex items-center justify-between rounded-2xl border border-[#E8DDC7] px-5 py-4 text-sm font-semibold text-[#252840] bg-transparent transition-colors ${
+                  PAYMENTS_ENABLED
+                    ? 'cursor-pointer hover:border-[#C8864B] hover:bg-[rgba(200,134,75,0.05)]'
+                    : 'cursor-not-allowed opacity-60'
+                }`}
               >
                 <span>{opt.limit} cr</span>
-                <span className="text-[#C8864B] font-bold">{opt.price}</span>
+                <span className="text-[#C8864B] font-bold">{PAYMENTS_ENABLED ? opt.price : 'Bientôt disponible'}</span>
               </button>
             ))}
           </div>

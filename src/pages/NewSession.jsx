@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import useAuthStore from '../store/authStore'
+import { GROUP_SESSIONS_ENABLED } from '../config/features'
 
 const CATEGORIES = ['Mathematics','Languages','Music','Programming','Design','Cooking','Science','Art','Sport','Other']
 
@@ -65,24 +66,28 @@ export default function NewSession() {
       const scheduledAt = new Date(`${form.date}T${form.time}:00`).toISOString()
       const body = {
         title:             form.title,
-        estimatedDuration: form.duration,
+        estimatedDuration: Number(form.duration),
         scheduledAt,
-        isOpen:            form.sessionMode === 'ouverte',
+        learnerId:         form.invitedIds[0],
       }
-      if (form.sessionMode === 'cadree') {
-        body.learnerId         = form.invitedIds[0]
-        body.maxParticipants   = form.maxParticipants
-        body.invitedIds        = form.invitedIds.slice(1)
-      } else {
-        if (form.openLimit) body.maxParticipants = Number(form.openLimit)
+      if (GROUP_SESSIONS_ENABLED) {
+        body.isOpen = form.sessionMode === 'ouverte'
+        if (form.sessionMode === 'cadree') {
+          body.maxParticipants = form.maxParticipants
+          body.invitedIds      = form.invitedIds.slice(1)
+        } else {
+          if (form.openLimit) body.maxParticipants = Number(form.openLimit)
+        }
       }
       const res = await api.post('/sessions', body)
-      const sessionId = res.data?.session?.id ?? res.data?.id
-      if (form.sessionMode === 'ouverte' && sessionId) {
-        setCreatedLink(`${window.location.origin}/sessions/${sessionId}`)
-      } else {
-        navigate('/sessions')
+      if (GROUP_SESSIONS_ENABLED) {
+        const sessionId = res.data?.session?.id ?? res.data?.id
+        if (form.sessionMode === 'ouverte' && sessionId) {
+          setCreatedLink(`${window.location.origin}/sessions/${sessionId}`)
+          return
+        }
       }
+      navigate('/sessions')
     } catch (err) {
       setError(err.response?.data?.message || 'Erreur lors de la création')
     } finally {
@@ -94,7 +99,7 @@ export default function NewSession() {
   const labelClass = "text-[11px] font-bold uppercase tracking-[0.6px] text-[#7A6E5C] block mb-1"
 
   /* ── Écran lien de partage ── */
-  if (createdLink) return (
+  if (GROUP_SESSIONS_ENABLED && createdLink) return (
     <main className="pt-[62px] min-h-screen bg-[#F8F4EA] flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl border border-black/[0.09] p-10 w-full max-w-[480px] text-center shadow-sm">
         <div className="w-14 h-14 rounded-2xl bg-[#E4EED8] flex items-center justify-center mx-auto mb-5">
@@ -217,22 +222,18 @@ export default function NewSession() {
               </button>
 
               {/* Carte Session ouverte */}
-              <button type="button" onClick={() => set('sessionMode', 'ouverte')}
-                className={`text-left p-5 rounded-2xl border-[2px] cursor-pointer transition-all bg-transparent
-                  ${form.sessionMode === 'ouverte'
-                    ? 'border-[#3D5C28] bg-[#E4EED8]'
-                    : 'border-black/[0.09] hover:border-[#3D5C28]/40 bg-white'}`}>
+              <button type="button" disabled
+                className="text-left p-5 rounded-2xl border-[2px] border-black/[0.06] bg-white/60 opacity-70 cursor-not-allowed transition-all">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center
-                    ${form.sessionMode === 'ouverte' ? 'bg-[#3D5C28]' : 'bg-[#EEF4E8]'}`}>
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={form.sessionMode === 'ouverte' ? 'white' : '#3D5C28'} strokeWidth="1.6" strokeLinecap="round">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#EEF4E8]">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#3D5C28" strokeWidth="1.6" strokeLinecap="round">
                       <circle cx="6" cy="6" r="3"/><circle cx="12" cy="6" r="3"/><circle cx="9" cy="13" r="3"/>
                       <path d="M8.5 9.5l-2 2"/><path d="M9.5 9.5l2 2"/>
                     </svg>
                   </div>
                   <div>
                     <p className="text-[14px] font-bold text-[#1A1410]">Session ouverte</p>
-                    {form.sessionMode === 'ouverte' && <p className="text-[10px] text-[#3D5C28] font-semibold">Sélectionné</p>}
+                    <span className="text-[10px] font-bold bg-[#ECEEF8] text-[#252840] px-2 py-0.5 rounded-full">Bientôt disponible</span>
                   </div>
                 </div>
                 <p className="text-[12px] text-[#7A6E5C] leading-relaxed">
@@ -267,22 +268,29 @@ export default function NewSession() {
                   ))}
                 </div>
               )}
-              <div>
-                <label className={labelClass}>Nombre max de participants (2–10)</label>
-                <input type="number" min="2" max="10" className={inputClass}
-                  value={form.maxParticipants}
-                  onChange={e => set('maxParticipants', Math.min(10, Math.max(2, Number(e.target.value))))} />
-              </div>
+              {GROUP_SESSIONS_ENABLED && (
+                <div>
+                  <label className={labelClass}>Nombre max de participants (2–10)</label>
+                  <input type="number" min="2" max="10" className={inputClass}
+                    value={form.maxParticipants}
+                    onChange={e => set('maxParticipants', Math.min(10, Math.max(2, Number(e.target.value))))} />
+                </div>
+              )}
               {form.invitedIds.length > 0 && (
                 <p className="text-[12px] text-[#3D5C28] font-semibold">
                   {form.invitedIds.length} participant{form.invitedIds.length > 1 ? 's' : ''} sélectionné{form.invitedIds.length > 1 ? 's' : ''}
+                </p>
+              )}
+              {form.invitedIds.length > 1 && (
+                <p className="text-[12px] text-[#C8864B] bg-[#FBF1E7] px-4 py-3 rounded-xl">
+                  Les sessions multi-participants arrivent bientôt, seul le premier invité sera convié pour l'instant.
                 </p>
               )}
             </div>
           )}
 
           {/* Contenu mode ouverte */}
-          {form.sessionMode === 'ouverte' && (
+          {GROUP_SESSIONS_ENABLED && form.sessionMode === 'ouverte' && (
             <div className="bg-white rounded-2xl border border-black/[0.09] p-6 flex flex-col gap-4">
               <p className="text-[13px] font-bold text-[#1A1410]">Paramètres de la session ouverte</p>
               <div>
@@ -297,7 +305,7 @@ export default function NewSession() {
           )}
 
           <button type="submit"
-            disabled={loading || !form.sessionMode || (form.sessionMode === 'cadree' && form.invitedIds.length === 0)}
+            disabled={loading || !form.sessionMode || form.invitedIds.length === 0}
             className="w-full py-3 rounded-xl bg-[#252840] text-white text-[14px] font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-all disabled:opacity-50">
             {loading ? 'Création…' : 'Créer la session'}
           </button>
