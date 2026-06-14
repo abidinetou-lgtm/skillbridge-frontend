@@ -1,245 +1,251 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ArrowDownLeft, ArrowUpRight, Coins } from 'lucide-react'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
-import { useToast } from '../components/Toast'
-import CreditIcon from '../components/CreditIcon'
-import { PAYMENTS_ENABLED } from '../config/features'
+import Reveal from '../components/Reveal'
 
-const PACKS = [
-  { id: 'starter', name: 'Starter', credits: 60,  price: 4.99,  hours: '1h',  popular: false },
-  { id: 'plus',    name: 'Plus',    credits: 180, price: 9.99,  hours: '3h',  popular: true  },
-  { id: 'pro',     name: 'Pro',     credits: 360, price: 17.99, hours: '6h',  popular: false },
-  { id: 'max',     name: 'Max',     credits: 720, price: 29.99, hours: '12h', popular: false },
-]
 const LIMIT = 500
 
-const TRUST_BADGES = [
-  {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3D5C28" strokeWidth="1.6" strokeLinecap="round">
-        <rect x="2" y="7" width="16" height="12" rx="3"/><path d="M6 7V5a4 4 0 018 0v2"/>
-      </svg>
-    ),
-    label: 'Paiement sécurisé',
-  },
-  {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3D5C28" strokeWidth="1.6" strokeLinecap="round">
-        <path d="M4 10a6 6 0 1012 0 6 6 0 00-12 0M10 4v2M10 14v2M4 10H2M18 10h-2"/>
-      </svg>
-    ),
-    label: 'Crédits permanents',
-  },
-  {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#3D5C28" strokeWidth="1.6" strokeLinecap="round">
-        <path d="M13 2L4 11h7l-4 7 9-9h-7z"/>
-      </svg>
-    ),
-    label: 'Utilisation instantanée',
-  },
-]
-
 export default function Credits() {
-  const navigate = useNavigate()
-  const { user, setUser } = useAuthStore()
-  const addToast = useToast()
+  const navigate  = useNavigate()
+  const { user }  = useAuthStore()
+  const balance   = user?.credits ?? 0
+  const pct       = Math.min(Math.round((balance / LIMIT) * 100), 100)
+  const atLimit   = balance >= LIMIT
 
-  const [buying,   setBuying]   = useState(null)
-  const [error,    setError]    = useState('')
-  const [paid,     setPaid]     = useState(false)
-  const [paidPack, setPaidPack] = useState(null)
-  const [newBal,   setNewBal]   = useState(null)
+  const [sessions, setSessions] = useState([])
+  const [loading,  setLoading]  = useState(true)
 
-  const balance = user?.credits ?? 0
+  useEffect(() => {
+    if (!user) return
+    api.get('/sessions/mine')
+      .then(res => setSessions(res.data.sessions ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [user])
 
-  const handleBuy = async (pack) => {
-    if (!PAYMENTS_ENABLED) return
-    setError('')
-    setBuying(pack.id)
-    try {
-      const res = await api.post('/credits/purchase', {
-        packId:  pack.id,
-        credits: pack.credits,
-        amount:  pack.price,
-      })
-      const bal = res.data.credits ?? res.data.user?.credits ?? (balance + pack.credits)
-      if (res.data.user) setUser(res.data.user)
-      setNewBal(bal)
-      setPaidPack(pack)
-      setPaid(true)
-      addToast?.(`${pack.credits} crédits ajoutés !`, 'success')
-    } catch (e) {
-      setError(e.response?.data?.message || 'Erreur lors de l\'achat. Réessayez.')
-    } finally {
-      setBuying(null)
-    }
-  }
+  const completed   = sessions.filter(s => s.status === 'COMPLETED')
+  const asTeacher   = completed.filter(s => s.teacher?.id === user?.id)
+  const asLearner   = completed.filter(s => s.learner?.id  === user?.id)
+  const totalEarned = asTeacher.reduce((a, s) => a + (s.creditsConsumed ?? 0), 0)
+  const totalSpent  = asLearner.reduce((a, s) => a + (s.creditsConsumed ?? 0), 0)
 
-  /* ── Écran de confirmation ── */
-  if (PAYMENTS_ENABLED && paid && paidPack) {
-    return (
-      <main className="min-h-screen bg-[#FDFAF4] flex items-center justify-center p-6">
-        <div className="animate-fade-up w-full max-w-md rounded-3xl border border-[#E8DDC7] bg-white p-8 text-center shadow-soft">
-          <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-[#3D5C28] text-white mb-6">
-            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M6 18l8 8L30 10"/>
-            </svg>
-          </span>
-          <h1 className="text-3xl font-black tracking-tight text-[#252840]">Paiement réussi !</h1>
-          <p className="mt-2 text-[#756B5B]">
-            {paidPack.credits} crédits ont été ajoutés à ton compte.
-          </p>
-          <div className="mt-6 rounded-2xl bg-[#F8F4EA] p-5">
-            <p className="text-sm text-[#756B5B]">Nouveau solde</p>
-            <p className="text-4xl font-black text-[#252840]">
-              {Math.min(newBal, LIMIT)} <span className="text-lg font-semibold text-[#C8864B]">cr</span>
-            </p>
-          </div>
-          <button
-            onClick={() => { setPaid(false); setPaidPack(null) }}
-            className="mt-6 w-full py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors"
-          >
-            Retour aux crédits
-          </button>
-        </div>
-      </main>
-    )
-  }
+  const history = [...completed]
+    .sort((a, b) => new Date(b.actualEndedAt || b.startsAt) - new Date(a.actualEndedAt || a.startsAt))
+    .map(s => {
+      const isTeacher   = s.teacher?.id === user?.id
+      const partner     = isTeacher ? s.learner : s.teacher
+      const amount      = isTeacher ? (s.creditsConsumed ?? 0) : -(s.creditsConsumed ?? 0)
+      const partnerName = `${partner?.firstName ?? ''} ${partner?.lastName ?? ''}`.trim() || '—'
+      const date        = s.actualEndedAt
+        ? new Date(s.actualEndedAt).toLocaleDateString('fr', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '—'
+      return { id: s.id, label: s.title || 'Session', amount, with: partnerName, date }
+    })
 
   return (
-    <main className="min-h-screen bg-[#FDFAF4]">
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+    <main className="min-h-screen" style={{ background: 'var(--cream)' }}>
 
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-[#252840]">Acheter des crédits</h1>
-          <p className="mt-2 text-[#756B5B]">
-            Les crédits n'expirent jamais · limite de {LIMIT} cr
-          </p>
-        </div>
+      {/* Dark hero banner — no FloatingDecor */}
+      <section className="relative overflow-hidden py-16 text-white" style={{ background: 'var(--ink)' }}>
+        <div className="relative mx-auto max-w-3xl px-6">
+          <Reveal>
+            <p className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--orange-warm)' }}>
+              Tes crédits
+            </p>
+          </Reveal>
+          <Reveal delay={1}>
+            <h1 className="mt-3 text-5xl font-extrabold tracking-tight sm:text-6xl">
+              {balance} <span style={{ color: 'var(--orange-warm)' }}>crédits</span>
+            </h1>
+          </Reveal>
+          <Reveal delay={2}>
+            <p className="mt-2 text-white/75">
+              soit <strong>{balance} minutes</strong> de cours disponibles.
+            </p>
+          </Reveal>
 
-        {/* Balance card */}
-        <div className="mx-auto mb-8 max-w-2xl rounded-3xl border border-[#E8DDC7] bg-white p-6 shadow-card">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-xl bg-[rgba(200,134,75,0.12)]">
-                <CreditIcon size="md" />
-              </span>
-              <div>
-                <p className="text-sm text-[#756B5B]">Solde actuel</p>
-                <p className="text-2xl font-black text-[#252840]">{balance} cr</p>
-              </div>
-            </div>
-            <p className="text-sm font-semibold text-[#756B5B]">{balance} / {LIMIT}</p>
-          </div>
-          <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-[#F8F4EA]">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${Math.min((balance / LIMIT) * 100, 100)}%`,
-                background: 'linear-gradient(to right, #3D5C28, #C8864B)',
-              }}
-            />
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-600 text-sm font-semibold">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="8" cy="8" r="7"/><path d="M8 5v3M8 11h.01"/>
-            </svg>
-            {error}
-          </div>
-        )}
-
-        {/* Grille des packs */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 mb-10">
-          {PACKS.map(pack => {
-            const exceeds  = balance + pack.credits > LIMIT
-            const disabled = !PAYMENTS_ENABLED || balance >= LIMIT || exceeds || buying !== null
-
-            return (
-              <div
-                key={pack.id}
-                className={`relative flex flex-col rounded-3xl bg-white p-6 shadow-card transition-transform hover:-translate-y-1 ${
-                  pack.popular ? 'border-2 border-[#C8864B]' : 'border border-[#E8DDC7]'
-                } ${exceeds || balance >= LIMIT ? 'opacity-55' : ''}`}
-              >
-                {pack.popular && (
-                  <span className="absolute -top-3 left-6 rounded-full bg-[#C8864B] px-3 py-1 text-xs font-bold text-white">
-                    Populaire
-                  </span>
-                )}
-                {exceeds && balance < LIMIT && (
-                  <span className="absolute -top-3 right-6 inline-flex items-center gap-1 rounded-full bg-red-500 px-3 py-1 text-xs font-bold text-white">
-                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5.5 1L10 9.5H1z"/><path d="M5.5 4.5v2M5.5 8v.5"/></svg>
-                    Dépasse la limite
-                  </span>
-                )}
-
-                <p className="text-xs font-bold uppercase tracking-widest text-[#756B5B]">{pack.name}</p>
-                <p className="mt-3 text-4xl font-black text-[#252840]">
-                  {pack.credits} <span className="text-lg font-bold text-[#C8864B]">cr</span>
+          {atLimit && (
+            <Reveal delay={2}>
+              <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl px-5 py-4"
+                style={{ background: 'rgba(201,134,75,0.15)', border: '1px solid var(--orange-warm)' }}>
+                <p className="text-sm font-semibold text-white/90">
+                  Plafond atteint — dépense tes crédits en apprenant quelque chose de nouveau
                 </p>
-                <p className="mt-1 text-[#756B5B] text-sm">{pack.price.toFixed(2)} € · {pack.hours} de session</p>
-
-                <button
-                  onClick={() => handleBuy(pack)}
-                  disabled={disabled}
-                  className={`mt-6 w-full rounded-full py-3 text-sm font-bold border-none cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    pack.popular
-                      ? 'bg-[#C8864B] text-white hover:bg-[#B07030]'
-                      : 'bg-[#252840] text-white hover:bg-[#363B6B]'
-                  }`}
-                >
-                  {!PAYMENTS_ENABLED ? 'Bientôt disponible' : buying === pack.id ? 'Traitement…' : exceeds || balance >= LIMIT ? 'Plafond atteint' : 'Acheter'}
+                <button onClick={() => navigate('/connection')}
+                  className="flex-shrink-0 px-4 py-2 rounded-full text-white text-sm font-bold border-none cursor-pointer transition hover:-translate-y-0.5"
+                  style={{ background: 'var(--orange-warm)' }}>
+                  Trouver quelqu'un
                 </button>
               </div>
-            )
-          })}
-        </div>
+            </Reveal>
+          )}
 
-        {/* Section augmentation plafond */}
-        <div className="mb-10 rounded-3xl border border-[#E8DDC7] bg-white p-6 shadow-card">
-          <h2 className="text-lg font-bold text-[#252840] mb-1">Augmenter votre plafond</h2>
-          <p className="text-sm text-[#756B5B] mb-4">Passez à 750 cr ou 1000 cr pour stocker plus de crédits</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[
-              { limit: 750, price: '9.99 €' },
-              { limit: 1000, price: '14.99 €' },
-            ].map(opt => (
-              <button
-                key={opt.limit}
-                disabled={!PAYMENTS_ENABLED}
-                onClick={() => PAYMENTS_ENABLED && api.post('/credits/increase-limit', { newLimit: opt.limit })
-                  .then(() => addToast?.(`Plafond augmenté à ${opt.limit} cr`, 'success'))
-                  .catch(() => addToast?.("Erreur lors de l'augmentation du plafond.", 'error'))
-                }
-                className={`flex items-center justify-between rounded-2xl border border-[#E8DDC7] px-5 py-4 text-sm font-semibold text-[#252840] bg-transparent transition-colors ${
-                  PAYMENTS_ENABLED
-                    ? 'cursor-pointer hover:border-[#C8864B] hover:bg-[rgba(200,134,75,0.05)]'
-                    : 'cursor-not-allowed opacity-60'
-                }`}
-              >
-                <span>{opt.limit} cr</span>
-                <span className="text-[#C8864B] font-bold">{PAYMENTS_ENABLED ? opt.price : 'Bientôt disponible'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Trust badges */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {TRUST_BADGES.map(b => (
-            <div
-              key={b.label}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-[#E8DDC7] bg-white p-4 text-sm font-semibold text-[#252840]"
-            >
-              {b.icon} {b.label}
+          <Reveal delay={3}>
+            <div className="mt-8 max-w-2xl">
+              <div className="flex items-center justify-between text-xs uppercase tracking-wider text-white/70 mb-2">
+                <span>Progression vers le plafond</span>
+                <span>{balance} / {LIMIT}</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                <div className="h-full rounded-full transition-all duration-1000"
+                  style={{ width: `${pct}%`, background: 'linear-gradient(to right, var(--learn), var(--orange-warm))' }} />
+              </div>
+              <p className="mt-2 text-xs text-white/60">
+                Plafond à 500 crédits pour t'inciter à apprendre plutôt qu'à thésauriser.
+                {!atLimit && ` · ${LIMIT - balance} cr avant le plafond`}
+              </p>
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Content — no FloatingDecor */}
+      <div className="mx-auto max-w-3xl px-6 py-12 space-y-6">
+
+        {/* 3 stat cards — données réelles */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: 'Solde',             value: balance,     color: 'var(--orange-warm)' },
+            { label: 'Gagnés au total',   value: totalEarned, color: 'var(--learn)'       },
+            { label: 'Dépensés au total', value: totalSpent,  color: 'var(--ink)'         },
+          ].map((s, i) => (
+            <Reveal key={s.label} delay={(i + 1)}>
+              <div className="card-lift rounded-3xl bg-white p-6 shadow-sm" style={{ border: '1px solid var(--border)' }}>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--muted-foreground)' }}>
+                  {s.label}
+                </p>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-4xl font-extrabold" style={{ color: s.color }}>
+                    {loading && i > 0 ? '—' : s.value}
+                  </span>
+                  <span className="text-sm" style={{ color: 'var(--muted-foreground)' }}>crédits</span>
+                </div>
+              </div>
+            </Reveal>
           ))}
         </div>
+
+        {/* Historique — sessions COMPLETED réelles */}
+        <Reveal delay={2}>
+          <div className="rounded-3xl bg-white p-6 shadow-sm sm:p-8" style={{ border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold" style={{ color: 'var(--ink)' }}>Historique</h2>
+              <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold"
+                style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
+                <Coins size={13} /> 1 cr = 1 min
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-10">
+                <div className="w-7 h-7 border-2 border-[#252840]/20 border-t-[#252840] rounded-full animate-spin" />
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-center py-10 leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>
+                Aucune transaction pour l'instant.<br />Les crédits apparaissent ici après tes séances terminées.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#F0EAE0]">
+                {history.map(h => {
+                  const gain = h.amount > 0
+                  return (
+                    <li key={h.id} className="flex items-center gap-4 py-4">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
+                        gain
+                          ? 'bg-[rgba(63,107,76,0.12)] text-[#3D5C28]'
+                          : 'bg-[rgba(217,142,74,0.12)] text-[#C8864B]'
+                      }`}>
+                        {gain ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                          {h.label}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                          avec {h.with} · {h.date}
+                        </p>
+                      </div>
+                      <span className={`text-lg font-extrabold tabular-nums ${gain ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>
+                        {gain ? '+' : ''}{h.amount} cr.
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+
+            <p className="mt-6 rounded-2xl p-4 text-center text-sm"
+              style={{ background: 'var(--cream)', color: 'var(--muted-foreground)' }}>
+              Les crédits ne s'achètent pas. Ils se gagnent, en enseignant.
+            </p>
+          </div>
+        </Reveal>
+
+        {/* Comment ça marche */}
+        <Reveal delay={3}>
+          <div className="rounded-3xl bg-white p-6" style={{ border: '1px solid var(--border)' }}>
+            <h2 className="text-lg font-bold mb-5" style={{ color: 'var(--ink)' }}>
+              Comment fonctionnent les crédits
+            </h2>
+            <div className="flex flex-col gap-4">
+              {[
+                {
+                  icon: <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="9" cy="9" r="7"/><path d="M9 5v4l2.5 2.5"/></svg>,
+                  color: 'var(--orange-warm)',
+                  title: '1 crédit = 1 minute',
+                  text: "Chaque crédit correspond à une minute de session d'apprentissage.",
+                },
+                {
+                  icon: <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1" y="5" width="16" height="11" rx="2"/><path d="M5 5V3a4 4 0 018 0v2"/></svg>,
+                  color: 'var(--ink)',
+                  title: 'Réservation à la création',
+                  text: 'Quand tu crées une session, les crédits sont mis de côté immédiatement.',
+                },
+                {
+                  icon: <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M9 15V3M4 8l5-5 5 5"/></svg>,
+                  color: 'var(--learn)',
+                  title: 'Versement + remboursement prorata',
+                  text: "À la fin, l'enseignant reçoit les crédits consommés. Si la session est plus courte, la différence t'est remboursée.",
+                },
+                {
+                  icon: <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 9h10M10 4l5 5-5 5"/></svg>,
+                  color: 'var(--orange-warm)',
+                  title: `Plafond ${LIMIT} crédits`,
+                  text: "Atteint le plafond ? Utilise tes crédits pour apprendre. L'objectif, c'est d'apprendre, pas de thésauriser.",
+                },
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-4">
+                  <span className="mt-0.5 grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl"
+                    style={{ background: `color-mix(in srgb, ${item.color} 12%, transparent)`, color: item.color }}>
+                    {item.icon}
+                  </span>
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: 'var(--ink)' }}>{item.title}</p>
+                    <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--muted-foreground)' }}>{item.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
+        {/* CTAs */}
+        <Reveal delay={4}>
+          <div className="flex flex-col gap-3 pb-6 sm:flex-row">
+            <button onClick={() => navigate('/connection')}
+              className="flex-1 py-3 rounded-full text-white text-sm font-bold border-none cursor-pointer transition hover:-translate-y-0.5"
+              style={{ background: 'var(--orange-warm)' }}>
+              Trouver quelqu'un à apprendre
+            </button>
+            <button onClick={() => navigate('/sessions/new')}
+              className="flex-1 py-3 rounded-full text-sm font-bold bg-transparent cursor-pointer transition hover:bg-[#252840] hover:text-white"
+              style={{ border: '2px solid var(--ink)', color: 'var(--ink)' }}>
+              Créer une session
+            </button>
+          </div>
+        </Reveal>
 
       </div>
     </main>

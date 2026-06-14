@@ -67,7 +67,7 @@ export default function ResetPassword() {
               </p>
               <button
                 onClick={() => navigate('/')}
-                className="w-full py-3 rounded-xl bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors"
+                className="w-full py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors"
               >
                 Se connecter
               </button>
@@ -78,7 +78,7 @@ export default function ResetPassword() {
               <p className="text-sm text-[#756B5B] mb-6">Ce lien est invalide ou a expiré.</p>
               <Link
                 to="/forgot-password"
-                className="inline-flex items-center justify-center rounded-xl bg-[#252840] px-6 py-3 text-sm font-bold text-white no-underline hover:bg-[#363B6B] transition-colors"
+                className="inline-flex items-center justify-center rounded-full bg-[#252840] px-6 py-3 text-sm font-bold text-white no-underline hover:bg-[#363B6B] transition-colors"
               >
                 Demander un nouveau lien
               </Link>
@@ -124,7 +124,7 @@ export default function ResetPassword() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-xl bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50"
+                  className="w-full py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50"
                 >
                   {loading ? 'Réinitialisation…' : 'Réinitialiser le mot de passe'}
                 </button>

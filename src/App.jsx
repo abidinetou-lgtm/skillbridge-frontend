@@ -19,6 +19,7 @@ import BecomeSharer    from './pages/BecomeSharer'
 import Credits         from './pages/Credits'
 import ForgotPassword  from './pages/ForgotPassword'
 import ResetPassword   from './pages/ResetPassword'
+import VerifyEmail     from './pages/VerifyEmail'
 import useAuthStore    from './store/authStore'
 import { authApi }     from './services/api'
 
@@ -36,7 +37,15 @@ export default function App() {
     let mounted = true
     authApi.me()
       .then((user) => { if (mounted) setUser(user) })
-      .catch(()    => { if (mounted) logout() })
+      .catch((err) => {
+        if (!mounted) return
+        // Only clear token on explicit auth rejection (401/403), not on network errors.
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          logout()
+        } else {
+          markAuthReady()
+        }
+      })
     return () => { mounted = false }
   }, [token, setUser, logout, markAuthReady])
 
@@ -44,12 +53,15 @@ export default function App() {
     <BrowserRouter>
       <ToastProvider>
         <Navbar />
+        {/* Spacer for fixed navbar */}
+        <div className="h-16 flex-shrink-0" aria-hidden="true" />
         <CookieBanner />
         <AuthModal />
         <div className="pb-16 md:pb-0">
         <Routes>
           <Route path="/"                  element={<HomePage />} />
           <Route path="/register"          element={<RegisterPage />} />
+          <Route path="/verify-email"      element={<VerifyEmail />} />
           <Route path="/feed"              element={<FeedPage />} />
           <Route path="/connection"        element={<ConnectionPage />} />
           <Route path="/user/:id"          element={<UserProfilePage />} />

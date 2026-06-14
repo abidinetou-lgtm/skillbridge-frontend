@@ -1,7 +1,35 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../store/authStore'
-import api from '../services/api'
+import api, { authApi } from '../services/api'
+
+function ResendVerification({ email }) {
+  const [sent,  setSent]  = useState(false)
+  const [err,   setErr]   = useState('')
+  const [busy,  setBusy]  = useState(false)
+
+  const send = async () => {
+    if (!email) return
+    setBusy(true); setErr('')
+    try {
+      await authApi.resendVerification(email)
+      setSent(true)
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Erreur lors du renvoi.')
+    } finally { setBusy(false) }
+  }
+
+  if (sent) return <p className="mt-4 text-sm font-semibold text-[#3D5C28]">Email renvoyé !</p>
+  return (
+    <div className="mt-4">
+      {err && <p className="text-xs text-red-500 mb-2">{err}</p>}
+      <button onClick={send} disabled={busy}
+        className="text-sm font-semibold text-[#756B5B] bg-transparent border-none cursor-pointer hover:text-[#252840] transition-colors disabled:opacity-50">
+        {busy ? 'Envoi…' : 'Renvoyer l\'email de vérification'}
+      </button>
+    </div>
+  )
+}
 
 const CLOUD_NAME    = 'derho2rib'
 const UPLOAD_PRESET = 'skillbridge_avatars'
@@ -86,8 +114,12 @@ export default function Register() {
   }
 
   const handleStep1 = async () => {
-    if (form.teaches.length === 0) { setError('Sélectionnez au moins une compétence à enseigner'); return }
-    if (form.wants.length   === 0) { setError('Sélectionnez au moins une compétence à apprendre'); return }
+    if (form.teaches.length === 0 && form.wants.length === 0) {
+      setError('Ajoute au moins une compétence à enseigner ET une à apprendre pour continuer')
+      return
+    }
+    if (form.teaches.length === 0) { setSkillToggle('teaches'); setError('Ajoute au moins une compétence à enseigner'); return }
+    if (form.wants.length   === 0) { setSkillToggle('wants');   setError('Ajoute au moins une compétence à apprendre'); return }
     setError(''); setLoading(true)
     try {
       const res = await api.post('/auth/register', {
@@ -98,14 +130,20 @@ export default function Register() {
         bio:       form.bio.trim() || undefined,
       })
       const { user, token } = res.data
-      login(user, token)
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      const base    = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-      await Promise.allSettled([
-        ...form.teaches.map(skill => fetch(`${base}/users/skills`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
-        ...form.wants.map(skill   => fetch(`${base}/users/learning-goals`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
-      ])
-      setStep(2)
+
+      // If the backend returned a token, auto-login. Otherwise show email verification screen.
+      if (token) {
+        login(user, token)
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        const base    = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+        await Promise.allSettled([
+          ...form.teaches.map(skill => fetch(`${base}/users/skills`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
+          ...form.wants.map(skill   => fetch(`${base}/users/learning-goals`, { method: 'POST', headers, body: JSON.stringify({ name: skill, category: 'General' }) }).catch(() => {})),
+        ])
+        setStep(2)
+      } else {
+        setStep('verify-email')
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Échec de l'inscription")
     } finally { setLoading(false) }
@@ -122,6 +160,26 @@ export default function Register() {
   const filteredSkills = ALL_SKILLS.filter(s =>
     s.toLowerCase().includes(skillSearch.toLowerCase())
   )
+
+  if (step === 'verify-email') {
+    return (
+      <div className="min-h-screen bg-[#F8F4EA] flex items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md text-center animate-fade-up">
+          <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-full bg-[rgba(61,92,40,0.12)] text-[#3D5C28]">
+            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <rect x="3" y="8" width="30" height="22" rx="3"/><path d="M3 15l15 9 15-9"/>
+            </svg>
+          </div>
+          <h1 className="text-3xl font-black tracking-tight text-[#252840]">Vérifie ta boîte mail !</h1>
+          <p className="mt-3 text-[#756B5B]">
+            Un lien de confirmation t'a été envoyé à <strong className="text-[#252840]">{form.email}</strong>.
+            Clique dessus pour activer ton compte.
+          </p>
+          <ResendVerification email={form.email} />
+        </div>
+      </div>
+    )
+  }
 
   if (step === 3) {
     return (
@@ -314,7 +372,19 @@ export default function Register() {
           {step === 1 && (
             <div className="rounded-3xl border border-[#E8DDC7] bg-white p-8 shadow-soft">
               <h2 className="text-2xl font-black tracking-tight text-[#252840]">Vos compétences</h2>
-              <p className="mt-1 text-sm text-[#756B5B] mb-5">Ce que vous pouvez enseigner et ce que vous voulez apprendre.</p>
+              <p className="mt-1 text-sm text-[#756B5B] mb-4">Ce que vous pouvez enseigner et ce que vous voulez apprendre.</p>
+
+              {/* Mini barre d'étapes */}
+              <div className="flex items-center gap-2 mb-5">
+                {[['teaches', "J'enseigne"], ['wants', "J'apprends"]].map(([v, l], i) => (
+                  <div key={v} className="flex items-center gap-2 flex-1">
+                    <div className={`flex-1 h-1 rounded-full transition-all ${form[v].length > 0 ? 'bg-[#C8864B]' : skillToggle === v ? 'bg-[#252840]' : 'bg-[#E8DDC7]'}`} />
+                    <span className={`text-[10px] font-bold whitespace-nowrap ${form[v].length > 0 ? 'text-[#C8864B]' : skillToggle === v ? 'text-[#252840]' : 'text-[#B0A898]'}`}>
+                      {i + 1}. {l}
+                    </span>
+                  </div>
+                ))}
+              </div>
 
               {/* Toggle */}
               <div className="inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-1 mb-5">
@@ -325,7 +395,7 @@ export default function Register() {
                         ? v === 'teaches' ? 'bg-[#252840] text-[#F8F4EA]' : 'bg-[#3D5C28] text-white'
                         : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
                     }`}>
-                    {l}{form[v].length > 0 ? ` (${form[v].length})` : ''}
+                    {l} ({form[v].length})
                   </button>
                 ))}
               </div>
@@ -376,13 +446,19 @@ export default function Register() {
                 </button>
               </div>
 
+              {(form.teaches.length === 0 || form.wants.length === 0) && !loading && (
+                <p className="text-xs text-[#C8864B] bg-[rgba(200,134,75,0.1)] rounded-xl px-4 py-2 mb-1">
+                  Ajoute au moins une compétence à enseigner ET une à apprendre pour continuer.
+                </p>
+              )}
+
               <div className="flex gap-3">
                 <button onClick={() => { setError(''); setStep(0) }}
                   className="px-5 py-3 rounded-full border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-colors">
                   Retour
                 </button>
                 <button onClick={handleStep1}
-                  disabled={loading || form.teaches.length === 0 || form.wants.length === 0}
+                  disabled={loading}
                   className="flex-1 py-3 rounded-full bg-[#C8864B] text-white font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                   {loading ? 'Création…' : 'Continuer →'}
                 </button>

@@ -36,7 +36,13 @@ export default function AuthModal() {
       login(data.user, data.token)
       closeModal()
     } catch (err) {
-      setError(getApiError(err))
+      const msg = getApiError(err)
+      const status = err?.response?.status
+      if (status === 403 && msg.toLowerCase().includes('verif')) {
+        setError(`Ton email n'est pas encore vérifié. Vérifie ta boîte mail ou renvoie le lien depuis /verify-email.`)
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }

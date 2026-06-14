@@ -6,31 +6,103 @@ import { useToast } from '../components/Toast'
 import CreditIcon from '../components/CreditIcon'
 
 const STATUS_STYLE = {
-  SCHEDULED: { bg: 'bg-[rgba(61,92,40,0.12)]', text: 'text-[#3D5C28]',   label: 'À venir'    },
-  ACTIVE:    { bg: 'bg-[rgba(200,134,75,0.15)]', text: 'text-[#C8864B]', label: 'En direct'  },
-  COMPLETED: { bg: 'bg-[rgba(37,40,64,0.1)]',   text: 'text-[#252840]', label: 'Terminée'   },
-  CANCELLED: { bg: 'bg-red-50',                 text: 'text-red-500',    label: 'Annulée'    },
-}
-
-function AvatarInitials({ name, color }) {
-  const parts = (name ?? '').split(' ')
-  const initials = (parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')
-  return (
-    <div
-      className="h-14 w-14 rounded-full flex items-center justify-center text-base font-bold text-white flex-shrink-0"
-      style={{ background: color ?? '#252840' }}
-    >
-      {initials.toUpperCase() || '?'}
-    </div>
-  )
+  SCHEDULED: { bg: 'bg-[rgba(61,92,40,0.12)]',    text: 'text-[#3D5C28]', label: 'À venir'   },
+  ACTIVE:    { bg: 'bg-[rgba(200,134,75,0.15)]',  text: 'text-[#C8864B]', label: 'En direct' },
+  COMPLETED: { bg: 'bg-[rgba(37,40,64,0.1)]',     text: 'text-[#252840]', label: 'Terminée'  },
+  CANCELLED: { bg: 'bg-red-50',                   text: 'text-red-500',   label: 'Annulée'   },
 }
 
 function CalIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-      <rect x="1" y="3" width="12" height="10" rx="2"/>
-      <path d="M1 6h12M5 1v3M9 1v3"/>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <rect x="1" y="3" width="12" height="10" rx="2"/><path d="M1 6h12M5 1v3M9 1v3"/>
     </svg>
+  )
+}
+
+function SessionDetailModal({ session, user, onClose }) {
+  const [joining, setJoining] = useState(false)
+  const addToast = useToast()
+  const navigate = useNavigate()
+
+  const isTeacher   = session.teacher?.id === user?.id
+  const partner     = isTeacher ? session.learner : session.teacher
+  const partnerName = `${partner?.firstName ?? ''} ${partner?.lastName ?? ''}`.trim()
+  const st          = STATUS_STYLE[session.status] ?? STATUS_STYLE.SCHEDULED
+  const canJoin     = session.status === 'SCHEDULED' || session.status === 'ACTIVE'
+
+  const handleJoin = async () => {
+    setJoining(true)
+    try {
+      await api.post(`/sessions/${session.id}/join`)
+      navigate(`/sessions/${session.id}`)
+    } catch (e) {
+      addToast?.(e.response?.data?.message || 'Impossible de rejoindre', 'error')
+    } finally { setJoining(false) }
+  }
+
+  const formatDate = (iso) => {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('fr', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  return (
+    <div className="fixed inset-0 z-[500] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl p-8 w-[440px] max-w-full shadow-soft border border-[#E8DDC7] animate-fade-up"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black text-[#252840] truncate pr-4">{session.title || 'Session'}</h2>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-full bg-[#F8F4EA] border-none cursor-pointer text-[#756B5B] flex items-center justify-center hover:bg-[#E8DDC7] transition-colors flex-shrink-0">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1l10 10M11 1L1 11"/></svg>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4 mb-6 p-4 rounded-2xl bg-[#F8F4EA]">
+          <div className="h-12 w-12 rounded-full bg-[#252840] text-white flex items-center justify-center font-bold text-base flex-shrink-0">
+            {partner?.firstName?.[0]}{partner?.lastName?.[0]}
+          </div>
+          <div>
+            <p className="text-sm font-bold text-[#252840]">{partnerName || '—'}</p>
+            <p className="text-xs text-[#756B5B]">{isTeacher ? 'Apprenant' : 'Enseignant'}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 mb-6">
+          {[
+            { label: 'Date',             value: formatDate(session.startsAt) },
+            { label: 'Durée estimée',    value: `${session.creditsReserved} min` },
+            { label: 'Crédits réservés', value: `${session.creditsReserved} cr` },
+            { label: 'Visibilité',       value: session.isOpen ? 'Publique' : 'Privée' },
+          ].map(row => (
+            <div key={row.label} className="flex items-center justify-between py-2 border-b border-[#F0EAE0] last:border-0">
+              <span className="text-xs text-[#756B5B] font-medium">{row.label}</span>
+              <span className="text-sm font-semibold text-[#252840]">{row.value}</span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between py-2">
+            <span className="text-xs text-[#756B5B] font-medium">Statut</span>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${st.bg} ${st.text}`}>{st.label}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          {canJoin && (
+            <button onClick={handleJoin} disabled={joining}
+              className="flex-1 py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <rect x="1" y="3" width="9" height="9" rx="2"/><path d="M10 5l4-2v8l-4-2"/>
+              </svg>
+              {joining ? 'Connexion…' : 'Rejoindre la session'}
+            </button>
+          )}
+          <button onClick={() => { navigate(`/sessions/${session.id}`); onClose() }}
+            className={`${canJoin ? 'px-5' : 'flex-1'} py-3 rounded-full border-2 border-[#252840] text-[#252840] text-sm font-bold bg-transparent cursor-pointer hover:bg-[#252840] hover:text-white transition-colors`}>
+            Ouvrir
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -45,6 +117,7 @@ export default function Sessions() {
   const [tab,        setTab]        = useState('teach')
   const [confirmId,  setConfirmId]  = useState(null)
   const [cancelling, setCancelling] = useState(null)
+  const [selected,   setSelected]   = useState(null)
 
   const loadSessions = useCallback(async () => {
     if (!user) return
@@ -54,9 +127,7 @@ export default function Sessions() {
       setError('')
     } catch (e) {
       if (sessions.length === 0) setError(e.response?.data?.message || 'Erreur de chargement')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }, [user])
 
   useEffect(() => {
@@ -73,10 +144,8 @@ export default function Sessions() {
       loadSessions()
       addToast?.('Session annulée', 'info')
     } catch (e) {
-      addToast?.(e.response?.data?.message || 'Erreur lors de l\'annulation', 'error')
-    } finally {
-      setCancelling(null)
-    }
+      addToast?.(e.response?.data?.message || "Erreur lors de l'annulation", 'error')
+    } finally { setCancelling(null) }
   }
 
   const teaching = sessions.filter(s => s.teacher?.id === user?.id)
@@ -89,8 +158,18 @@ export default function Sessions() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FDFAF4]">
-      {/* Modal annulation */}
+    <main className="min-h-screen" style={{ background: 'var(--cream)' }}>
+
+      {/* Detail modal */}
+      {selected && (
+        <SessionDetailModal
+          session={selected}
+          user={user}
+          onClose={() => setSelected(null)}
+        />
+      )}
+
+      {/* Cancel confirm modal */}
       {confirmId && (
         <div className="fixed inset-0 z-[500] bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 w-[400px] max-w-full shadow-soft border border-[#E8DDC7]">
@@ -99,17 +178,12 @@ export default function Sessions() {
               La séance sera marquée comme annulée. Les crédits réservés seront remboursés.
             </p>
             <div className="flex gap-3">
-              <button
-                onClick={() => handleCancel(confirmId)}
-                disabled={!!cancelling}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-bold border-none cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50"
-              >
-                {cancelling ? 'Annulation…' : 'Confirmer l\'annulation'}
+              <button onClick={() => handleCancel(confirmId)} disabled={!!cancelling}
+                className="flex-1 py-3 rounded-full bg-red-500 text-white text-sm font-bold border-none cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-50">
+                {cancelling ? 'Annulation…' : "Confirmer l'annulation"}
               </button>
-              <button
-                onClick={() => setConfirmId(null)}
-                className="px-5 py-3 rounded-xl border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-colors"
-              >
+              <button onClick={() => setConfirmId(null)}
+                className="px-5 py-3 rounded-full border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-[#252840] transition-colors">
                 Retour
               </button>
             </div>
@@ -117,36 +191,45 @@ export default function Sessions() {
         </div>
       )}
 
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        {/* Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
-          <h1 className="text-4xl font-black tracking-tight text-[#252840]">Mes sessions</h1>
-          <button
-            onClick={() => navigate('/sessions/new')}
-            className="inline-flex items-center gap-2 rounded-full bg-[#C8864B] px-5 py-2.5 text-sm font-bold text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors w-fit"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M7 1v12M1 7h12"/>
-            </svg>
-            Nouvelle session
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-1 mb-8">
-          {[['teach', "J'enseigne"], ['learn', 'Je reçois']].map(([v, l]) => (
-            <button
-              key={v}
-              onClick={() => setTab(v)}
-              className={`rounded-full px-5 py-2 text-sm font-semibold border-none cursor-pointer transition-colors ${
-                tab === v ? 'bg-[#252840] text-[#F8F4EA]' : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
-              }`}
-            >
-              {l}
+      {/* Header */}
+      <section className="bg-white border-b border-[#E8DDC7] py-10">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <p className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--orange-warm)' }}>
+            Tes sessions
+          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+            <h1 className="text-4xl font-black tracking-tight" style={{ color: 'var(--ink)' }}>
+              À l'agenda
+            </h1>
+            <button onClick={() => navigate('/sessions/new')}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white border-none cursor-pointer w-fit transition hover:-translate-y-0.5"
+              style={{ background: 'var(--orange-warm)' }}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M7 1v12M1 7h12"/>
+              </svg>
+              Nouvelle session
             </button>
-          ))}
-        </div>
+          </div>
 
+          <div className="inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-1 shadow-sm">
+            <button onClick={() => setTab('teach')}
+              className={`rounded-full px-6 py-2.5 text-sm font-bold border-none cursor-pointer transition-all ${
+                tab === 'teach' ? 'bg-[#C8864B] text-white shadow-sm' : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+              }`}>
+              J'enseigne
+            </button>
+            <button onClick={() => setTab('learn')}
+              className={`rounded-full px-6 py-2.5 text-sm font-bold border-none cursor-pointer transition-all ${
+                tab === 'learn' ? 'bg-[#3D5C28] text-white shadow-sm' : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+              }`}>
+              Je reçois
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Cards */}
+      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
         {loading && (
@@ -161,18 +244,18 @@ export default function Sessions() {
               {tab === 'teach' ? 'Aucune session à donner' : 'Aucune session à recevoir'}
             </p>
             <p className="text-sm text-[#756B5B] mb-6">
-              {tab === 'teach' ? 'Créez une session avec l\'un de vos pairs connectés.' : 'Demandez à un pair de planifier une session avec vous.'}
+              {tab === 'teach'
+                ? "Créez une session avec l'un de vos pairs connectés."
+                : 'Demandez à un pair de planifier une session avec vous.'}
             </p>
-            <button
-              onClick={() => navigate('/sessions/new')}
-              className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors"
-            >
+            <button onClick={() => navigate('/sessions/new')}
+              className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
               + Nouvelle session
             </button>
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {list.map(s => {
             const partner     = tab === 'teach' ? s.learner : s.teacher
             const partnerName = `${partner?.firstName ?? ''} ${partner?.lastName ?? ''}`.trim()
@@ -183,62 +266,57 @@ export default function Sessions() {
             const canCancel   = isCreator && (s.status === 'SCHEDULED' || s.status === 'ACTIVE')
 
             return (
-              <div
+              <article
                 key={s.id}
-                className={`flex flex-col gap-4 rounded-3xl border bg-white p-5 shadow-card sm:flex-row sm:items-center sm:justify-between transition-all ${
-                  isCancelled ? 'opacity-50 border-[#E8DDC7]' : isLive ? 'border-[#3D5C28] cursor-pointer hover:-translate-y-0.5' : 'border-[#E8DDC7] cursor-pointer hover:-translate-y-0.5 hover:shadow-soft'
+                className={`card-lift cursor-pointer rounded-3xl bg-white p-6 shadow-sm transition-all ${
+                  isCancelled ? 'opacity-50' : isLive ? 'ring-2 ring-[#3D5C28]' : ''
                 }`}
-                onClick={() => !isCancelled && navigate(`/sessions/${s.id}`)}
+                onClick={() => !isCancelled && setSelected(s)}
               >
-                <div className="flex items-center gap-4">
-                  <AvatarInitials name={partnerName} color={isLive ? '#3D5C28' : '#252840'} />
-                  <div>
-                    <p className="text-lg font-bold text-[#252840]">{s.title || 'Session'}</p>
-                    <p className="text-sm text-[#756B5B]">{partnerName}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-[#756B5B]">
-                      <span className="inline-flex items-center gap-1">
-                        <CalIcon /> {formatDate(s.startsAt)}
-                      </span>
-                      <span className="inline-flex items-center gap-1 font-semibold text-[#C8864B]">
-                        <CreditIcon size="sm" /> {s.creditsReserved} cr
-                      </span>
-                    </div>
+                {/* Status + credits */}
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${st.bg} ${st.text}`}>{st.label}</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#F8F4EA] px-3 py-1 text-xs font-bold text-[#252840]">
+                    <CreditIcon size="sm" /> {s.creditsReserved} cr
+                  </span>
+                </div>
+
+                {/* Title */}
+                <h3 className="font-bold text-[#252840] text-base leading-tight mb-3">{s.title || 'Session'}</h3>
+
+                {/* Partner */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-9 w-9 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
+                    style={{ background: isLive ? '#3D5C28' : '#252840' }}>
+                    {partner?.firstName?.[0]}{partner?.lastName?.[0]}
+                  </div>
+                  <div className="text-sm min-w-0">
+                    <p className="font-semibold text-[#252840] truncate">{partnerName || '—'}</p>
+                    <p className="text-xs text-[#756B5B]">{tab === 'teach' ? 'tu enseignes' : 'tu apprends'}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3" onClick={e => e.stopPropagation()}>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${st.bg} ${st.text}`}>
-                    {st.label}
+                {/* Date + actions */}
+                <div className="flex items-center justify-between" onClick={e => e.stopPropagation()}>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-[#756B5B]">
+                    <CalIcon /> {formatDate(s.startsAt)}
                   </span>
-                  {isLive && (
-                    <button
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="inline-flex items-center gap-2 rounded-full bg-[#C8864B] px-4 py-2 text-sm font-bold text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                        <rect x="1" y="3" width="9" height="9" rx="2"/><path d="M10 5l4-2v8l-4-2"/>
-                      </svg>
-                      Rejoindre
-                    </button>
-                  )}
-                  {s.status === 'SCHEDULED' && (
-                    <button
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="rounded-full border-2 border-[#252840] px-4 py-2 text-sm font-bold text-[#252840] bg-transparent cursor-pointer hover:bg-[#F8F4EA] transition-colors"
-                    >
-                      Ouvrir
-                    </button>
-                  )}
-                  {canCancel && (
-                    <button
-                      onClick={() => setConfirmId(s.id)}
-                      className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-500 bg-transparent cursor-pointer hover:bg-red-50 transition-colors"
-                    >
-                      Annuler
-                    </button>
-                  )}
+                  <div className="flex gap-2">
+                    {isLive && (
+                      <button onClick={e => { e.stopPropagation(); navigate(`/sessions/${s.id}`) }}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#C8864B] px-3 py-1.5 text-xs font-bold text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors">
+                        Rejoindre
+                      </button>
+                    )}
+                    {canCancel && (
+                      <button onClick={e => { e.stopPropagation(); setConfirmId(s.id) }}
+                        className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-500 bg-transparent cursor-pointer hover:bg-red-50 transition-colors">
+                        Annuler
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </article>
             )
           })}
         </div>

@@ -1,9 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import {
+  Search, Pin, Archive, Trash2, Paperclip,
+  Image as ImageIcon, Video as VideoIcon, File as FileIcon,
+  Send, ChevronLeft, MessageCircle,
+} from 'lucide-react'
 import useAuthStore from '../store/authStore'
 import { convApi, getApiError } from '../services/api'
 import api from '../services/api'
 import { useToast } from '../components/Toast'
-import { FILE_UPLOAD_ENABLED } from '../config/features'
+import { FILE_UPLOAD_ENABLED, CHAT_DELETE_ENABLED, CHAT_ARCHIVE_ENABLED, CHAT_PIN_ENABLED } from '../config/features'
+import ChatBackdrop from '../components/ChatBackdrop'
 
 const CLOUDINARY_URL    = 'https://api.cloudinary.com/v1_1/derho2rib/auto/upload'
 const CLOUDINARY_PRESET = 'skillbridge_avatars'
@@ -22,17 +28,44 @@ function formatBytes(bytes) {
 }
 
 function fileIcon(type) {
-  if (type === 'application/pdf')
-    return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h4"/></svg>
-  if (type?.includes('word') || type?.includes('document'))
-    return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 6l2 6 1.5-4 1.5 4 2-6"/></svg>
-  if (type?.includes('excel') || type?.includes('spreadsheet'))
-    return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="2" y="1" width="12" height="14" rx="2"/><path d="M5 5h6M5 8h6M5 11h6M8 5v9"/></svg>
-  if (type?.includes('zip') || type?.includes('compressed'))
-    return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="3" y="1" width="10" height="14" rx="2"/><path d="M7 1v4M9 1v4M7 5h2M7 7h2M7 9h2"/></svg>
-  if (type?.startsWith('video/'))
-    return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1" y="3" width="10" height="10" rx="2"/><path d="M11 6l4-2.5v8L11 9"/></svg>
-  return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M10 2H4a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V6z"/><polyline points="10 2 10 6 14 6"/></svg>
+  if (type?.startsWith('video/')) return <VideoIcon size={16} />
+  return <FileIcon size={16} />
+}
+
+function ConvAvatar({ conv }) {
+  if (conv.avatarUrl) {
+    return (
+      <img src={conv.avatarUrl} alt={conv.name}
+        className="h-10 w-10 rounded-full object-cover flex-shrink-0" />
+    )
+  }
+  return (
+    <div className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
+      style={{ background: conv.color }}>
+      {conv.initials}
+    </div>
+  )
+}
+
+function getDateLabel(isoStr) {
+  if (!isoStr) return ''
+  const d = new Date(isoStr)
+  const today = new Date()
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === today.toDateString())     return "Aujourd'hui"
+  if (d.toDateString() === yesterday.toDateString()) return 'Hier'
+  return d.toLocaleDateString('fr', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
+function groupByDate(msgs) {
+  const groups = []
+  let key = null
+  msgs.forEach(m => {
+    const dk = m.rawCreatedAt ? new Date(m.rawCreatedAt).toDateString() : 'x'
+    if (dk !== key) { key = dk; groups.push({ label: getDateLabel(m.rawCreatedAt), msgs: [] }) }
+    groups[groups.length - 1].msgs.push(m)
+  })
+  return groups
 }
 
 function mapMessage(m, userId) {
@@ -40,16 +73,17 @@ function mapMessage(m, userId) {
   const isVideo = m.fileUrl && (m.mimeType ?? m.fileType ?? '').startsWith('video/')
   const isFile  = m.fileUrl && !isImg && !isVideo
   return {
-    id:       m.id,
-    from:     m.sender.id === userId ? 'me' : 'them',
-    senderName: `${m.sender.firstName} ${m.sender.lastName}`,
-    text:     m.body ?? null,
-    fileUrl:  m.fileUrl ?? null,
-    fileName: m.fileName ?? null,
-    fileSize: m.fileSize ?? null,
-    fileType: m.mimeType ?? m.fileType ?? null,
-    msgType:  isImg ? 'image' : isVideo ? 'video' : isFile ? 'file' : 'text',
-    time:     new Date(m.createdAt).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }),
+    id:           m.id,
+    from:         m.sender.id === userId ? 'me' : 'them',
+    senderName:   `${m.sender.firstName} ${m.sender.lastName}`,
+    text:         m.body ?? null,
+    fileUrl:      m.fileUrl ?? null,
+    fileName:     m.fileName ?? null,
+    fileSize:     m.fileSize ?? null,
+    fileType:     m.mimeType ?? m.fileType ?? null,
+    msgType:      isImg ? 'image' : isVideo ? 'video' : isFile ? 'file' : 'text',
+    time:         new Date(m.createdAt).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }),
+    rawCreatedAt: m.createdAt,
   }
 }
 
@@ -58,6 +92,8 @@ export default function Chat() {
   const addToast  = useToast()
 
   const [conversations,  setConversations]  = useState([])
+  const [archivedConvs,  setArchivedConvs]  = useState([])
+  const [convView,       setConvView]       = useState('active')
   const [activeId,       setActiveId]       = useState(null)
   const [messages,       setMessages]       = useState({})
   const [input,          setInput]          = useState('')
@@ -67,6 +103,9 @@ export default function Chat() {
   const [showAttach,     setShowAttach]     = useState(false)
   const [lightbox,       setLightbox]       = useState(null)
   const [showThread,     setShowThread]     = useState(false)
+  const [search,         setSearch]         = useState('')
+  const [convMenu,       setConvMenu]       = useState(null)
+  const [hoveredMsg,     setHoveredMsg]     = useState(null)
 
   const messagesEndRef = useRef(null)
   const pollRef        = useRef(null)
@@ -78,32 +117,53 @@ export default function Chat() {
   const active = conversations.find(c => c.id === activeId)
   const msgs   = messages[activeId] ?? []
 
+  const filteredConvs = conversations.filter(c =>
+    !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())
+  )
+
   useEffect(() => {
     if (!showAttach) return
-    const handler = (e) => {
+    const onMouse = (e) => {
       if (!attachBarRef.current?.contains(e.target)) setShowAttach(false)
     }
+    const onKey = (e) => { if (e.key === 'Escape') setShowAttach(false) }
+    document.addEventListener('mousedown', onMouse)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onMouse)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [showAttach])
+
+  useEffect(() => {
+    if (!convMenu) return
+    const handler = () => setConvMenu(null)
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showAttach])
+  }, [convMenu])
 
   useEffect(() => {
     if (!user) return
     convApi.list()
       .then(data => {
-        const convs = (data.conversations ?? data).map(c => ({
-          id:       c.id,
-          name:     `${c.other.firstName} ${c.other.lastName}`,
-          initials: `${c.other.firstName[0]}${c.other.lastName[0]}`.toUpperCase(),
-          color:    convColor(c.other.firstName),
-          preview:  c.lastMessage?.body ?? '',
-          time:     c.lastMessage
+        const all = (data.conversations ?? data).map(c => ({
+          id:        c.id,
+          status:    c.status ?? 'ACTIVE',
+          name:      `${c.other.firstName} ${c.other.lastName}`,
+          initials:  `${c.other.firstName[0]}${c.other.lastName[0]}`.toUpperCase(),
+          color:     convColor(c.other.firstName),
+          avatarUrl: c.other?.avatarUrl ?? null,
+          preview:   c.lastMessage?.body ?? '',
+          time:      c.lastMessage
             ? new Date(c.lastMessage.createdAt).toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' })
             : '',
           unread: c.unreadCount ?? 0,
         }))
-        setConversations(convs)
-        if (convs.length > 0) setActiveId(convs[0].id)
+        const active   = all.filter(c => c.status !== 'ARCHIVED')
+        const archived = all.filter(c => c.status === 'ARCHIVED')
+        setConversations(active)
+        setArchivedConvs(archived)
+        if (active.length > 0) setActiveId(active[0].id)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -137,6 +197,7 @@ export default function Chat() {
     const tmp = {
       id: Date.now(), from: 'me', msgType: 'text', text,
       time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }),
+      rawCreatedAt: new Date().toISOString(),
     }
     setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), tmp] }))
     try { await convApi.send(activeId, text) }
@@ -146,8 +207,7 @@ export default function Chat() {
 
   const uploadFile = async (e) => {
     const file = e.target.files?.[0]
-    if (!file || !activeId) return
-    if (!FILE_UPLOAD_ENABLED) return
+    if (!file || !activeId || !FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
@@ -165,10 +225,11 @@ export default function Chat() {
         fileSize: d.fileSize ?? file.size,
         fileType: d.fileType ?? file.type,
         time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }),
+        rawCreatedAt: new Date().toISOString(),
       }
       setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), tmp] }))
       addToast?.('Fichier envoyé', 'success')
-    } catch { addToast?.('Erreur lors de l\'envoi du fichier', 'error') }
+    } catch { addToast?.("Erreur lors de l'envoi du fichier", 'error') }
     finally { setUploading(false) }
   }
 
@@ -184,46 +245,92 @@ export default function Chat() {
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0]
-    if (!file || !activeId) return
-    if (!FILE_UPLOAD_ENABLED) return
+    if (!file || !activeId || !FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
     try {
       const { url } = await uploadCloudinary(file)
-      const tmp = { id: Date.now(), from: 'me', msgType: 'image', fileUrl: url, fileName: file.name, fileSize: file.size, fileType: file.type, time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) }
+      const tmp = { id: Date.now(), from: 'me', msgType: 'image', fileUrl: url, fileName: file.name, fileSize: file.size, fileType: file.type, time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }), rawCreatedAt: new Date().toISOString() }
       setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), tmp] }))
       addToast?.('Image envoyée', 'success')
-    } catch { addToast?.('Erreur lors de l\'envoi de l\'image', 'error') }
+    } catch { addToast?.("Erreur lors de l'envoi de l'image", 'error') }
     finally { setUploading(false) }
   }
 
   const handleVideoUpload = async (e) => {
     const file = e.target.files?.[0]
-    if (!file || !activeId) return
-    if (!FILE_UPLOAD_ENABLED) return
+    if (!file || !activeId || !FILE_UPLOAD_ENABLED) return
     e.target.value = ''
     setShowAttach(false)
     setUploading(true)
     try {
       const { url } = await uploadCloudinary(file)
-      const tmp = { id: Date.now(), from: 'me', msgType: 'video', fileUrl: url, fileName: file.name, fileSize: file.size, fileType: file.type, time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }) }
+      const tmp = { id: Date.now(), from: 'me', msgType: 'video', fileUrl: url, fileName: file.name, fileSize: file.size, fileType: file.type, time: new Date().toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' }), rawCreatedAt: new Date().toISOString() }
       setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), tmp] }))
-      addToast?.('Vidéo envoyée', 'success')
-    } catch { addToast?.('Erreur lors de l\'envoi de la vidéo', 'error') }
+      addToast?.('Video envoyée', 'success')
+    } catch { addToast?.("Erreur lors de l'envoi de la vidéo", 'error') }
     finally { setUploading(false) }
   }
 
   const openConversation = (convId) => {
     setActiveId(convId)
     setShowThread(true)
+    setConvMenu(null)
+  }
+
+  const handlePinConv = (convId) => {
+    setConvMenu(null)
+    addToast?.('Bientôt disponible', 'info')
+  }
+
+  const handleArchiveConv = async (convId) => {
+    setConvMenu(null)
+    if (!CHAT_ARCHIVE_ENABLED) { addToast?.('Bientôt disponible', 'info'); return }
+    try {
+      await convApi.archive(convId)
+      const conv = conversations.find(c => c.id === convId)
+      if (conv) {
+        setConversations(prev => prev.filter(c => c.id !== convId))
+        setArchivedConvs(prev => [...prev, conv])
+        if (activeId === convId) { setActiveId(null); setShowThread(false) }
+      }
+    } catch { addToast?.("Erreur lors de l'archivage", 'error') }
+  }
+
+  const handleDeleteConv = async (convId) => {
+    setConvMenu(null)
+    if (!CHAT_DELETE_ENABLED) { addToast?.('Bientôt disponible', 'info'); return }
+    try {
+      await convApi.destroy(convId)
+      setConversations(prev => prev.filter(c => c.id !== convId))
+      if (activeId === convId) { setActiveId(null); setShowThread(false) }
+    } catch { addToast?.('Erreur lors de la suppression', 'error') }
+  }
+
+  const handleUnarchiveConv = async (convId) => {
+    if (!CHAT_ARCHIVE_ENABLED) { addToast?.('Bientôt disponible', 'info'); return }
+    try {
+      await convApi.unarchive(convId)
+      const conv = archivedConvs.find(c => c.id === convId)
+      if (conv) {
+        setArchivedConvs(prev => prev.filter(c => c.id !== convId))
+        setConversations(prev => [conv, ...prev])
+      }
+    } catch { addToast?.('Erreur lors du désarchivage', 'error') }
+  }
+
+  const handleDeleteMsg = (msgId) => {
+    addToast?.('Bientôt disponible', 'info')
   }
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-[#FDFAF4]">
+    <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 68px)', background: 'var(--cream)' }}>
       <div className="w-8 h-8 border-2 border-[#252840]/20 border-t-[#252840] rounded-full animate-spin" />
     </div>
   )
+
+  const grouped = groupByDate(msgs)
 
   return (
     <>
@@ -239,50 +346,172 @@ export default function Chat() {
         </div>
       )}
 
-      <main className="h-screen bg-[#FDFAF4] flex overflow-hidden" style={{ paddingTop: '64px' }}>
+      <main className="flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 68px)', background: 'var(--cream)' }}>
+        <div className="flex flex-1 overflow-hidden sm:p-4">
+        <div className="flex flex-1 overflow-hidden sm:rounded-3xl sm:border sm:border-[#E8DDC7] sm:shadow-sm">
 
-        {/* Sidebar */}
-        <div className={`flex-shrink-0 w-full sm:w-80 bg-white border-r border-[#E8DDC7] flex flex-col ${showThread ? 'hidden sm:flex' : 'flex'}`}>
+        {/* ── Sidebar ── */}
+        <div className={`flex-shrink-0 w-full sm:w-80 bg-white sm:border-r border-r border-[#E8DDC7] flex flex-col ${showThread ? 'hidden sm:flex' : 'flex'}`}>
+
+          {/* Sidebar header — toggle Actives / Archivées */}
           <div className="px-5 py-4 border-b border-[#E8DDC7]">
-            <h2 className="text-lg font-black text-[#252840]">Messages</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-black text-[#252840]">
+                {convView === 'active' ? 'Messages' : 'Archivées'}
+              </h2>
+              <div className="inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-0.5">
+                <button
+                  onClick={() => setConvView('active')}
+                  className={`rounded-full px-3 py-1 text-xs font-bold border-none cursor-pointer transition-colors ${
+                    convView === 'active'
+                      ? 'bg-white text-[#252840] shadow-sm'
+                      : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+                  }`}>
+                  Actives
+                </button>
+                <button
+                  onClick={() => setConvView('archived')}
+                  className={`rounded-full px-3 py-1 text-xs font-bold border-none cursor-pointer transition-colors ${
+                    convView === 'archived'
+                      ? 'bg-white text-[#252840] shadow-sm'
+                      : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+                  }`}>
+                  Archivées
+                </button>
+              </div>
+            </div>
+            {convView === 'active' && (
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B0A898]" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Rechercher…"
+                  className="w-full h-9 pl-8 pr-3 rounded-full border border-[#E8DDC7] bg-[#FDFAF4] text-sm outline-none focus:border-[#C8864B] transition-colors"
+                />
+              </div>
+            )}
           </div>
+
+          {/* Sidebar conversation list */}
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
-              <div className="p-6 text-center text-sm text-[#756B5B]">Aucune conversation</div>
-            ) : conversations.map(conv => (
-              <button key={conv.id} onClick={() => openConversation(conv.id)}
-                className={`w-full flex items-center gap-3 px-5 py-4 border-b border-[#F0EAE0] text-left transition-colors cursor-pointer ${
-                  activeId === conv.id ? 'bg-[rgba(37,40,64,0.06)]' : 'bg-transparent hover:bg-[#F8F4EA]'
-                }`}>
-                <div className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
-                  style={{ background: conv.color }}>
-                  {conv.initials}
+
+            {/* ─ Archived view ─ */}
+            {convView === 'archived' && (
+              !CHAT_ARCHIVE_ENABLED ? (
+                <div className="p-8 text-center">
+                  <Archive size={36} className="mx-auto mb-3 text-[#E8DDC7]" />
+                  <p className="text-sm font-semibold text-[#252840]">Archivage bientôt disponible</p>
+                  <p className="text-xs text-[#756B5B] mt-1">Cette fonctionnalité arrive prochainement.</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-[#252840] truncate">{conv.name}</span>
-                    <span className="text-[10px] text-[#B0A898] flex-shrink-0 ml-1">{conv.time}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-xs text-[#756B5B] truncate">{conv.preview || 'Démarrez la conversation'}</span>
-                    {conv.unread > 0 && (
-                      <span className="ml-2 h-5 w-5 rounded-full bg-[#C8864B] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                        {conv.unread}
-                      </span>
-                    )}
-                  </div>
+              ) : archivedConvs.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Archive size={36} className="mx-auto mb-3 text-[#E8DDC7]" />
+                  <p className="text-sm font-semibold text-[#252840]">Aucune conversation archivée</p>
                 </div>
-              </button>
-            ))}
+              ) : (
+                archivedConvs.map(conv => (
+                  <div key={conv.id} className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EAE0]">
+                    <ConvAvatar conv={conv} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[#252840] truncate">{conv.name}</p>
+                      <p className="text-xs text-[#756B5B] truncate">{conv.preview || '—'}</p>
+                    </div>
+                    <button
+                      onClick={() => handleUnarchiveConv(conv.id)}
+                      className="flex-shrink-0 px-3 py-1.5 rounded-full border border-[#E8DDC7] text-xs font-semibold text-[#252840] bg-transparent cursor-pointer hover:bg-[#F8F4EA] transition-colors">
+                      Activer
+                    </button>
+                  </div>
+                ))
+              )
+            )}
+
+            {/* ─ Active conversations view ─ */}
+            {convView === 'active' && (
+              conversations.length === 0 ? (
+                <div className="p-8 text-center">
+                  <svg className="mx-auto mb-3 text-[#E8DDC7]" width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <path d="M35 25a5 5 0 01-5 5H12L5 36V10a5 5 0 015-5h20a5 5 0 015 5v15z"/>
+                  </svg>
+                  <p className="text-sm font-semibold text-[#252840]">Aucune conversation</p>
+                  <p className="text-xs text-[#756B5B] mt-1">Connecte-toi à d'autres élèves pour démarrer.</p>
+                </div>
+              ) : filteredConvs.length === 0 ? (
+                <div className="p-6 text-center text-sm text-[#756B5B]">Aucun résultat</div>
+              ) : filteredConvs.map(conv => (
+                <div key={conv.id} className="relative group">
+                  <button onClick={() => openConversation(conv.id)}
+                    className={`w-full flex items-center gap-3 px-5 py-4 border-b border-[#F0EAE0] text-left transition-colors cursor-pointer ${
+                      activeId === conv.id ? 'bg-[rgba(37,40,64,0.06)]' : 'bg-transparent hover:bg-[#F8F4EA]'
+                    }`}>
+                    <ConvAvatar conv={conv} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-[#252840] truncate">{conv.name}</span>
+                        <span className="text-[10px] text-[#B0A898] flex-shrink-0 ml-1">{conv.time}</span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="text-xs text-[#756B5B] truncate">{conv.preview || 'Démarrez la conversation'}</span>
+                        {conv.unread > 0 && (
+                          <span className="ml-2 h-5 w-5 rounded-full bg-[#C8864B] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                            {conv.unread}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Conv actions menu button */}
+                  <button
+                    onClick={e => { e.stopPropagation(); setConvMenu(convMenu === conv.id ? null : conv.id) }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-white border border-[#E8DDC7] items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hidden group-hover:flex z-10 shadow-sm"
+                    title="Actions"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="#756B5B" aria-hidden><circle cx="6" cy="2" r="1.2"/><circle cx="6" cy="6" r="1.2"/><circle cx="6" cy="10" r="1.2"/></svg>
+                  </button>
+
+                  {convMenu === conv.id && (
+                    <div className="absolute right-2 top-10 z-20 w-48 bg-white rounded-2xl border border-[#E8DDC7] shadow-soft overflow-hidden animate-modal-in">
+                      <button
+                        onClick={() => handlePinConv(conv.id)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-left hover:bg-[#F8F4EA] cursor-pointer bg-transparent border-none transition-colors text-[#252840]"
+                      >
+                        <Pin size={13} />
+                        Épingler
+                        {!CHAT_PIN_ENABLED && <span className="ml-auto text-[10px] text-[#B0A898]">bientôt</span>}
+                      </button>
+                      <button
+                        onClick={() => handleArchiveConv(conv.id)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-left hover:bg-[#F8F4EA] cursor-pointer bg-transparent border-none transition-colors text-[#252840] border-t border-[#F0EAE0]"
+                      >
+                        <Archive size={13} />
+                        Archiver
+                        {!CHAT_ARCHIVE_ENABLED && <span className="ml-auto text-[10px] text-[#B0A898]">bientôt</span>}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteConv(conv.id)}
+                        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm text-left hover:bg-red-50 cursor-pointer bg-transparent border-none transition-colors text-red-500 border-t border-[#F0EAE0]"
+                      >
+                        <Trash2 size={13} />
+                        Supprimer
+                        {!CHAT_DELETE_ENABLED && <span className="ml-auto text-[10px] text-[#B0A898]">bientôt</span>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Thread */}
+        {/* ── Thread ── */}
         <div className={`flex-1 flex flex-col overflow-hidden ${!showThread && 'hidden sm:flex'}`}>
 
           {!active ? (
-            <div className="flex-1 flex items-center justify-center text-[#756B5B] text-sm">
-              Sélectionnez une conversation
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[#756B5B]">
+              <MessageCircle size={48} className="text-[#E8DDC7]" />
+              <p className="text-sm font-semibold">Sélectionnez une conversation</p>
             </div>
           ) : (
             <>
@@ -291,82 +520,100 @@ export default function Chat() {
                 <button
                   onClick={() => setShowThread(false)}
                   className="sm:hidden h-8 w-8 rounded-full bg-[#F8F4EA] flex items-center justify-center border-none cursor-pointer mr-1 flex-shrink-0">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#252840" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M9 2L4 7l5 5"/>
-                  </svg>
+                  <ChevronLeft size={16} className="text-[#252840]" />
                 </button>
-                <div className="h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm text-white flex-shrink-0"
-                  style={{ background: active.color }}>
-                  {active.initials}
-                </div>
+                <ConvAvatar conv={active} />
                 <div>
                   <p className="font-bold text-[#252840] text-sm">{active.name}</p>
-                  <p className="text-xs font-semibold">
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#3D5C28] mr-1 align-middle" />
-                    <span className="text-[#3D5C28]">En ligne</span>
-                  </p>
                 </div>
               </div>
 
               {/* Messages area */}
-              <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-3 bg-[#FDFAF4]">
-                {msgs.map(msg => {
-                  const isMe = msg.from === 'me'
-                  return (
-                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] rounded-2xl overflow-hidden ${
-                        msg.msgType === 'image' || msg.msgType === 'video' ? '' : 'px-4 py-3'
-                      } ${isMe
-                        ? 'bg-[#252840] text-[#F8F4EA] rounded-br-sm'
-                        : 'bg-white border border-[#E8DDC7] rounded-bl-sm text-[#252840] shadow-sm'
-                      }`}>
+              <div className="relative flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-0" style={{ background: 'var(--cream)' }}>
+                <ChatBackdrop />
+                {msgs.length === 0 ? (
+                  <div className="relative flex-1 flex flex-col items-center justify-center gap-2 py-16 z-10">
+                    <MessageCircle size={40} className="text-[#E8DDC7]" />
+                    <p className="text-sm text-[#756B5B] font-semibold">Commencez la conversation</p>
+                  </div>
+                ) : (
+                  grouped.map((group, gi) => (
+                    <div key={gi} className="relative z-10">
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="flex-1 h-px bg-[#E8DDC7]" />
+                        <span className="text-[10px] font-semibold text-[#B0A898] uppercase tracking-wide">{group.label}</span>
+                        <div className="flex-1 h-px bg-[#E8DDC7]" />
+                      </div>
 
-                        {msg.msgType === 'image' && (
-                          <div>
-                            <img src={msg.fileUrl} alt={msg.fileName}
-                              className="max-w-[220px] rounded-2xl border border-[rgba(0,0,0,0.06)] cursor-pointer block"
-                              onClick={() => setLightbox(msg.fileUrl)} />
-                            <div className={`px-3 py-1 text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
-                          </div>
-                        )}
-
-                        {msg.msgType === 'video' && (
-                          <div>
-                            <video src={msg.fileUrl} controls className="max-w-[220px] rounded-2xl block bg-black" />
-                            <div className={`px-3 py-1 text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
-                          </div>
-                        )}
-
-                        {msg.msgType === 'file' && (
-                          <div>
-                            <a href={msg.fileUrl} target="_blank" rel="noreferrer"
-                              className={`flex items-center gap-3 no-underline p-1 ${isMe ? 'text-[#F8F4EA]' : 'text-[#252840]'}`}>
-                              <span className="h-10 w-10 rounded-xl bg-[rgba(200,134,75,0.12)] flex items-center justify-center text-xl flex-shrink-0">
-                                {fileIcon(msg.fileType)}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold truncate underline">{msg.fileName}</p>
-                                {msg.fileSize && <p className={`text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{formatBytes(msg.fileSize)}</p>}
+                      <div className="flex flex-col gap-3">
+                        {group.msgs.map(msg => {
+                          const isMe = msg.from === 'me'
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`flex ${isMe ? 'justify-end' : 'justify-start'} group/msg relative`}
+                              onMouseEnter={() => setHoveredMsg(msg.id)}
+                              onMouseLeave={() => setHoveredMsg(null)}
+                            >
+                              {isMe && hoveredMsg === msg.id && (
+                                <button
+                                  onClick={() => handleDeleteMsg(msg.id)}
+                                  title={CHAT_DELETE_ENABLED ? 'Supprimer le message' : 'Bientôt disponible'}
+                                  className="self-center mr-2 flex-shrink-0 h-7 w-7 rounded-full bg-white border border-[#E8DDC7] items-center justify-center cursor-pointer hover:bg-red-50 hover:border-red-200 transition-colors shadow-sm flex text-[#756B5B]"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                              <div className={`max-w-[70%] rounded-2xl overflow-hidden ${
+                                msg.msgType === 'image' || msg.msgType === 'video' ? '' : 'px-4 py-3'
+                              } ${isMe
+                                ? 'bg-[#252840] text-[#F8F4EA] rounded-br-sm'
+                                : 'bg-[#F8F4EA] rounded-bl-sm text-[#252840]'
+                              }`}>
+                                {msg.msgType === 'image' && (
+                                  <div>
+                                    <img src={msg.fileUrl} alt={msg.fileName}
+                                      className="max-w-[220px] rounded-2xl border border-[rgba(0,0,0,0.06)] cursor-pointer block"
+                                      onClick={() => setLightbox(msg.fileUrl)} />
+                                    <div className={`px-3 py-1 text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
+                                  </div>
+                                )}
+                                {msg.msgType === 'video' && (
+                                  <div>
+                                    <video src={msg.fileUrl} controls className="max-w-[220px] rounded-2xl block bg-black" />
+                                    <div className={`px-3 py-1 text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
+                                  </div>
+                                )}
+                                {msg.msgType === 'file' && (
+                                  <div>
+                                    <a href={msg.fileUrl} target="_blank" rel="noreferrer"
+                                      className={`flex items-center gap-3 no-underline p-1 ${isMe ? 'text-[#F8F4EA]' : 'text-[#252840]'}`}>
+                                      <span className="h-10 w-10 rounded-xl bg-[rgba(200,134,75,0.12)] flex items-center justify-center text-xl flex-shrink-0">
+                                        {fileIcon(msg.fileType)}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold truncate underline">{msg.fileName}</p>
+                                        {msg.fileSize && <p className={`text-[10px] ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{formatBytes(msg.fileSize)}</p>}
+                                      </div>
+                                    </a>
+                                    <div className={`text-[10px] mt-1 px-1 ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
+                                  </div>
+                                )}
+                                {msg.msgType === 'text' && (
+                                  <>
+                                    <span className="text-sm leading-relaxed">{msg.text}</span>
+                                    <div className={`text-[10px] mt-1 ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
+                                  </>
+                                )}
                               </div>
-                              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="flex-shrink-0 opacity-60">
-                                <path d="M7 1v8M2 9l5 4 5-4"/><path d="M1 12h12"/>
-                              </svg>
-                            </a>
-                            <div className={`text-[10px] mt-1 px-1 ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
-                          </div>
-                        )}
-
-                        {msg.msgType === 'text' && (
-                          <>
-                            <span className="text-sm leading-relaxed">{msg.text}</span>
-                            <div className={`text-[10px] mt-1 ${isMe ? 'text-white/50' : 'text-[#756B5B]'}`}>{msg.time}</div>
-                          </>
-                        )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
-                  )
-                })}
-                <div ref={messagesEndRef} />
+                  ))
+                )}
+                <div ref={messagesEndRef} className="relative z-10" />
               </div>
 
               {/* Input area */}
@@ -375,39 +622,39 @@ export default function Chat() {
                 <input ref={imageRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={handleVideoUpload} />
 
-                {/* Input row (relative so attachment menu is positioned above) */}
                 <div className="relative flex gap-2 items-center">
-
-                {/* Attachment menu — floats above the + button */}
-                {showAttach && (
-                  <div ref={attachBarRef}
-                    className="absolute bottom-full left-0 mb-2 flex gap-2 rounded-xl bg-[#F8F4EA] p-2 shadow-lg border border-[#E8DDC7]">
-                    {[
-                      { label: 'Fichier', icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M8 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V6z"/><polyline points="8 2 8 6 12 6"/></svg>, action: () => fileRef.current?.click() },
-                      { label: 'Image',   icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1" y="2" width="12" height="10" rx="2"/><circle cx="4.5" cy="5.5" r="1.5"/><path d="M1 10l3-3 2 2 2-2 4 4"/></svg>, action: () => imageRef.current?.click() },
-                      { label: 'Vidéo',   icon: <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><rect x="1" y="3" width="9" height="9" rx="2"/><path d="M10 5l4-2v8l-4-2"/></svg>, action: () => videoRef.current?.click() },
-                    ].map(btn => (
-                      <button key={btn.label} type="button"
-                        onClick={btn.action}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border-none cursor-pointer transition-colors bg-white text-[#252840] hover:bg-[#C8864B] hover:text-white">
-                        {btn.icon}
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {showAttach && (
+                    <div ref={attachBarRef}
+                      className="absolute bottom-full left-0 mb-2 w-40 rounded-2xl bg-white border border-[#E8DDC7] shadow-soft overflow-hidden z-20 animate-modal-in">
+                      {[
+                        { label: 'Image',   Icon: ImageIcon, action: () => imageRef.current?.click() },
+                        { label: 'Vidéo',   Icon: VideoIcon, action: () => videoRef.current?.click() },
+                        { label: 'Fichier', Icon: FileIcon,  action: () => fileRef.current?.click()  },
+                      ].map(btn => (
+                        <button key={btn.label} type="button"
+                          disabled={!FILE_UPLOAD_ENABLED}
+                          onClick={() => { if (FILE_UPLOAD_ENABLED) { btn.action(); setShowAttach(false) } }}
+                          title={!FILE_UPLOAD_ENABLED ? 'Bientôt disponible' : undefined}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold border-none cursor-pointer transition-colors text-[#252840] hover:bg-[#F8F4EA] bg-transparent disabled:opacity-50 disabled:cursor-not-allowed border-b border-[#F0EAE0] last:border-0"
+                        >
+                          <btn.Icon size={15} className="flex-shrink-0 text-[#756B5B]" />
+                          {btn.label}
+                          {!FILE_UPLOAD_ENABLED && <span className="ml-auto text-[10px] text-[#B0A898]">bientôt</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <button type="button"
                     onClick={() => setShowAttach(s => !s)}
-                    disabled={uploading || !activeId || !FILE_UPLOAD_ENABLED}
-                    title={!FILE_UPLOAD_ENABLED ? 'Bientôt disponible' : undefined}
-                    className={`h-10 w-10 rounded-full flex items-center justify-center border-none cursor-pointer transition-all flex-shrink-0 text-xl font-bold disabled:opacity-40 disabled:cursor-not-allowed ${
-                      showAttach ? 'bg-[#252840] text-white rotate-45' : 'bg-[#F8F4EA] text-[#756B5B] hover:bg-[#252840] hover:text-white'
-                    }`}
-                    style={{ transition: 'all 0.2s ease' }}>
+                    disabled={uploading || !activeId}
+                    title="Joindre un fichier"
+                    className={`h-10 w-10 rounded-full flex items-center justify-center border-none cursor-pointer transition-all flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
+                      showAttach ? 'bg-[#252840] text-white' : 'bg-[#F8F4EA] text-[#756B5B] hover:bg-[#252840] hover:text-white'
+                    }`}>
                     {uploading
                       ? <div className="w-4 h-4 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-                      : '+'}
+                      : <Paperclip size={16} />}
                   </button>
 
                   <input
@@ -420,15 +667,15 @@ export default function Chat() {
 
                   <button onClick={send} disabled={sending}
                     className="h-10 w-10 rounded-full bg-[#C8864B] text-white border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50 flex items-center justify-center flex-shrink-0">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M14 2L1 8l5 2 2 5 6-13z"/>
-                    </svg>
+                    <Send size={16} />
                   </button>
                 </div>
               </div>
             </>
           )}
         </div>
+        </div>{/* rounded container */}
+        </div>{/* padding wrapper */}
       </main>
     </>
   )

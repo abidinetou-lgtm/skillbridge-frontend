@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Camera, LogOut, Pencil } from 'lucide-react'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import CreditIcon from '../components/CreditIcon'
@@ -8,6 +9,14 @@ const CLOUD_NAME    = 'derho2rib'
 const UPLOAD_PRESET = 'skillbridge_avatars'
 const AVAIL_KEY     = 'sb_availability'
 const AVATAR_KEY    = 'sb_avatar'
+const BANNER_KEY    = 'sb_banner'
+
+const BANNER_SCENES = [
+  { bg: 'linear-gradient(135deg,#3F6B4C 0%,#252840 100%)' },
+  { bg: 'linear-gradient(135deg,#D98E4A 0%,#7a3f1a 100%)' },
+  { bg: 'linear-gradient(135deg,#c9bce6 0%,#252840 100%)' },
+  { bg: 'linear-gradient(135deg,#b9d4e8 0%,#3F6B4C 100%)' },
+]
 
 const ALL_SKILLS = [
   'Mathematics','English','French','Spanish','Japanese','Chinese','Arabic','Portuguese',
@@ -36,7 +45,8 @@ const TABS = [
 export default function Profile() {
   const { user, logout, setUser } = useAuthStore()
   const navigate = useNavigate()
-  const fileRef  = useRef()
+  const fileRef   = useRef()
+  const bannerRef = useRef()
 
   const [tab,        setTab]        = useState('skills')
   const [profile,    setProfile]    = useState(null)
@@ -52,12 +62,23 @@ export default function Profile() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError,  setEditError]  = useState('')
 
-  const [avatar,    setAvatar]    = useState(() => localStorage.getItem(AVATAR_KEY) || '')
-  const [uploading, setUploading] = useState(false)
+  const [avatar,          setAvatar]          = useState(() => localStorage.getItem(AVATAR_KEY) || '')
+  const [uploading,       setUploading]       = useState(false)
+  const [banner,          setBanner]          = useState(() => localStorage.getItem(BANNER_KEY) || '')
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [bannerScene,     setBannerScene]     = useState(0)
 
   const [addingSkill, setAddingSkill] = useState(false)
   const [skillSearch, setSkillSearch] = useState('')
   const [skillSaving, setSkillSaving] = useState(false)
+
+  // Animated banner gradient
+  useEffect(() => {
+    if (banner) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const id = setInterval(() => setBannerScene(s => (s + 1) % BANNER_SCENES.length), 4500)
+    return () => clearInterval(id)
+  }, [banner])
 
   const loadProfile = async () => {
     if (!user) return
@@ -70,6 +91,7 @@ export default function Profile() {
       setProfile(p)
       setSessions(sessRes.data.sessions ?? [])
       if (p.avatarUrl) setAvatar(p.avatarUrl)
+      if (p.bannerUrl) { setBanner(p.bannerUrl); localStorage.setItem(BANNER_KEY, p.bannerUrl) }
       if (p.availability) { try { setAvail(JSON.parse(p.availability)) } catch {} }
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -79,7 +101,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#FDFAF4] flex items-center justify-center">
+      <main className="min-h-screen bg-[var(--cream)] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#252840]/20 border-t-[#252840] rounded-full animate-spin" />
       </main>
     )
@@ -141,6 +163,30 @@ export default function Profile() {
     finally { setUploading(false) }
   }
 
+  const handleBannerChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingBanner(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('upload_preset', UPLOAD_PRESET)
+      const res  = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: form })
+      const data = await res.json()
+      if (data.secure_url) {
+        localStorage.setItem(BANNER_KEY, data.secure_url)
+        setBanner(data.secure_url)
+        await api.put('/users/me', { bannerUrl: data.secure_url }).catch(() => {})
+      }
+    } catch (e) { console.error('Banner upload failed', e) }
+    finally { setUploadingBanner(false) }
+  }
+
+  const clearBanner = () => {
+    localStorage.removeItem(BANNER_KEY)
+    setBanner('')
+  }
+
   const toggleSlot = (day, slot) => { setAvail(prev => ({ ...prev, [`${day}_${slot}`]: !prev[`${day}_${slot}`] })); setAvailSaved(false) }
 
   const handleSaveAvail = async () => {
@@ -179,11 +225,12 @@ export default function Profile() {
   )
 
   return (
-    <main className="min-h-screen bg-[#FDFAF4]">
-      {/* Edit Modal */}
+    <main className="min-h-screen" style={{ background: 'var(--cream)' }}>
+
+      {/* Edit modal */}
       {editing && (
         <div className="fixed inset-0 z-[500] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-8 w-[440px] max-w-full max-h-[90vh] overflow-y-auto shadow-soft border border-[#E8DDC7]">
+          <div className="animate-modal-in bg-white rounded-3xl p-8 w-[440px] max-w-full max-h-[90vh] overflow-y-auto shadow-soft border border-[#E8DDC7]">
             <h2 className="text-xl font-black text-[#252840] mb-5">Modifier le profil</h2>
             {editError && <p className="text-red-500 text-sm mb-3 bg-red-50 px-3 py-2 rounded-lg">{editError}</p>}
             <div className="flex gap-3 mb-3">
@@ -234,9 +281,9 @@ export default function Profile() {
       {/* Skill add modal */}
       {addingSkill && (
         <div className="fixed inset-0 z-[500] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-[440px] max-w-full shadow-soft border border-[#E8DDC7]">
+          <div className="animate-modal-in bg-white rounded-3xl p-6 w-[440px] max-w-full shadow-soft border border-[#E8DDC7]">
             <h2 className="text-lg font-black text-[#252840] mb-1">
-              {addingSkill === 'teach' ? 'Compétence à enseigner' : 'Objectif d\'apprentissage'}
+              {addingSkill === 'teach' ? 'Compétence à enseigner' : "Objectif d'apprentissage"}
             </h2>
             <p className="text-xs text-[#756B5B] mb-4">Recherchez ou sélectionnez dans la liste</p>
             <input value={skillSearch} onChange={e => setSkillSearch(e.target.value)}
@@ -268,341 +315,366 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Banner */}
-      <div className="h-44 bg-gradient-to-br from-[#252840] via-[#363B6B] to-[#C8864B]" />
+      {/* Banner — animated gradient or custom image */}
+      <section className="relative overflow-hidden" style={{ minHeight: '260px' }}>
+        {/* Gradient scenes */}
+        {!banner && BANNER_SCENES.map((scene, i) => (
+          <div key={i} className="absolute inset-0 transition-opacity duration-[1400ms]"
+            style={{ background: scene.bg, opacity: bannerScene === i ? 1 : 0 }} />
+        ))}
+        {/* Custom image */}
+        {banner && <img src={banner} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+        {banner && <div className="absolute inset-0 bg-black/40" />}
+        <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={handleBannerChange} />
 
-      <div className="mx-auto max-w-4xl px-4 sm:px-6">
-        {/* Avatar + actions */}
-        <div className="flex items-end justify-between -mt-14 mb-4">
-          <div className="relative inline-block">
-            <div className="w-32 h-32 rounded-full border-4 border-[#F8F4EA] overflow-hidden cursor-pointer"
-              onClick={() => fileRef.current?.click()}>
-              {avatar
-                ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
-                : <div className="w-full h-full bg-[#252840] flex items-center justify-center text-white font-black text-3xl">{initials}</div>
-              }
-            </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="absolute bottom-1 right-1 w-9 h-9 rounded-full bg-[#C8864B] flex items-center justify-center shadow-md hover:bg-[#B07030] transition-all cursor-pointer border-2 border-[#F8F4EA]">
-              <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M15.5 13a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 13V6A1.5 1.5 0 013 4.5h1.5l1.2-2h3.6l1.2 2H14A1.5 1.5 0 0115.5 6v7z"/>
-                <circle cx="8.5" cy="9" r="2.2"/>
-              </svg>
-            </button>
-            {uploading && (
-              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+        <div className="relative mx-auto max-w-4xl px-4 sm:px-6 py-12 sm:py-16 text-white">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+
+            {/* Left: avatar + info */}
+            <div className="flex items-end gap-5">
+              <div className="relative flex-shrink-0">
+                <div
+                  className="w-24 h-24 rounded-3xl border-4 border-white/30 overflow-hidden cursor-pointer"
+                  style={{ background: 'rgba(37,40,64,0.7)' }}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {avatar
+                    ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full flex items-center justify-center text-white font-black text-3xl">{initials}</div>
+                  }
+                </div>
+                <button onClick={() => fileRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-[#C8864B] flex items-center justify-center shadow-md hover:bg-[#B07030] transition-all cursor-pointer border-2 border-white">
+                  <Camera size={13} color="white" strokeWidth={1.8} />
+                </button>
+                {uploading && (
+                  <div className="absolute inset-0 rounded-3xl bg-black/50 flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  </div>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
               </div>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-          </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-white/70 mb-1">Mon profil</p>
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-white leading-tight">{displayName || '—'}</h1>
+                <p className="text-sm text-white/70 mt-1">{user?.email}</p>
+                {profile?.bio && (
+                  <p className="text-sm text-white/80 mt-2 max-w-sm leading-relaxed">{profile.bio}</p>
+                )}
+              </div>
+            </div>
 
-          <div className="flex flex-wrap gap-2 mb-1">
-            <button onClick={startEdit}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#E8DDC7] text-[#252840] text-sm font-semibold bg-white cursor-pointer hover:border-[#252840] transition-colors">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M9.5 1.5l2 2L4 11H2v-2L9.5 1.5z"/></svg>
-              Modifier
-            </button>
-            <button onClick={() => navigate('/sessions/new')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 1v10M1 6h10"/></svg>
-              Séance
-            </button>
-            <button onClick={() => { logout(); navigate('/') }}
-              className="px-4 py-2 rounded-full border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-red-300 hover:text-red-500 transition-colors">
-              Déconnexion
-            </button>
+            {/* Right: actions */}
+            <div className="flex flex-wrap gap-2">
+              <button onClick={startEdit}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#252840] cursor-pointer border-none transition hover:-translate-y-0.5">
+                <Pencil size={13} /> Modifier
+              </button>
+              <button onClick={() => navigate('/sessions/new')}
+                className="inline-flex items-center gap-2 rounded-full bg-[#C8864B] px-4 py-2 text-sm font-bold text-white cursor-pointer border-none transition hover:-translate-y-0.5">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 1v10M1 6h10"/></svg>
+                Séance
+              </button>
+              <button onClick={() => bannerRef.current?.click()} disabled={uploadingBanner}
+                className="inline-flex items-center gap-2 rounded-full border border-white/60 px-4 py-2 text-sm font-bold text-white cursor-pointer bg-transparent hover:bg-white/10 transition disabled:opacity-50">
+                {uploadingBanner
+                  ? <div className="w-3.5 h-3.5 border-[1.5px] border-white/40 border-t-white rounded-full animate-spin" />
+                  : <Camera size={13} color="white" strokeWidth={1.8} />
+                }
+                Bannière
+              </button>
+              {banner && (
+                <button onClick={clearBanner}
+                  className="rounded-full border border-white/40 px-4 py-2 text-sm font-semibold text-white/80 cursor-pointer bg-transparent hover:bg-white/10 transition">
+                  Retirer photo
+                </button>
+              )}
+              <button onClick={() => { logout(); navigate('/') }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/60 px-4 py-2 text-sm font-bold text-white cursor-pointer bg-transparent hover:bg-white/10 transition">
+                <LogOut size={13} /> Déconnexion
+              </button>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Name + bio */}
-        <h1 className="text-2xl font-black tracking-tight text-[#252840]">{displayName}</h1>
-        <p className="text-sm text-[#756B5B]">{user?.email}</p>
-        {profile?.bio && <p className="text-sm text-[#756B5B] leading-relaxed mt-2 max-w-lg">{profile.bio}</p>}
-
-        {/* Stats */}
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Stats — floating card */}
+      <div className="relative -mt-6 z-10 mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="grid gap-3 rounded-3xl bg-white p-4 shadow-xl ring-1 ring-[#E8DDC7] sm:grid-cols-3 sm:p-5">
           {[
-            { value: credits,           label: 'Crédits disponibles', icon: <CreditIcon size="sm" />, bg: 'bg-[rgba(37,40,64,0.08)]',   text: 'text-[#252840]' },
-            { value: `+${totalEarned}`, label: 'Crédits gagnés',   icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 13V3M4 7l4-4 4 4"/></svg>, bg: 'bg-[rgba(61,92,40,0.12)]',   text: 'text-[#3D5C28]' },
-            { value: totalSpent,        label: 'Crédits dépensés', icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>, bg: 'bg-[rgba(200,134,75,0.12)]', text: 'text-[#C8864B]' },
+            { value: credits,           label: 'Crédits disponibles', icon: <CreditIcon size="sm" />,                                                                                             color: '#C8864B' },
+            { value: `+${totalEarned}`, label: 'Crédits gagnés',      icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 13V3M4 7l4-4 4 4"/></svg>, color: '#3D5C28' },
+            { value: totalSpent,        label: 'Crédits dépensés',    icon: <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>, color: '#252840' },
           ].map(stat => (
-            <div key={stat.label} className="flex items-center gap-4 rounded-2xl border border-[#E8DDC7] bg-white px-5 py-4 shadow-card">
-              <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-lg font-bold flex-shrink-0 ${stat.bg} ${stat.text}`}>
+            <div key={stat.label} className="flex items-center gap-4 rounded-2xl p-4" style={{ background: 'var(--cream)' }}>
+              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl text-white"
+                style={{ background: stat.color }}>
                 {stat.icon}
               </div>
               <div>
-                <p className={`text-2xl font-black leading-none ${stat.text}`}>{stat.value}</p>
-                <p className="text-xs text-[#756B5B] mt-0.5">{stat.label}</p>
+                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--muted-foreground)' }}>{stat.label}</p>
+                <p className="text-2xl font-extrabold" style={{ color: stat.color }}>{stat.value}</p>
               </div>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Tabs */}
-        <div className="mt-7 flex gap-1 bg-[#F8F4EA] rounded-full p-1 overflow-x-auto">
+      {/* Tabs + content */}
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 py-8 pb-20">
+
+        {/* Tab pills */}
+        <div className="flex flex-wrap gap-2">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap border-none cursor-pointer transition-colors ${
-                tab === t.key ? 'bg-[#252840] text-[#F8F4EA]' : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
+              className={`rounded-full px-4 py-2 text-sm font-bold transition cursor-pointer ${
+                tab === t.key
+                  ? 'bg-[#252840] text-white border-none'
+                  : 'border border-[#E8DDC7] bg-white text-[#252840] hover:border-[#C8864B] hover:text-[#C8864B]'
               }`}>
-              {t.label}{t.key === 'availability' && countSelected > 0 ? ` (${countSelected})` : ''}
+              {t.label}
+              {t.key === 'availability' && countSelected > 0 ? ` (${countSelected})` : ''}
               {t.key === 'sessions' && sessions.length > 0 ? ` (${sessions.length})` : ''}
             </button>
           ))}
         </div>
 
-        {/* ── Tab: Compétences ── */}
-        {tab === 'skills' && (
-          <div className="py-7 pb-16 flex flex-col gap-6">
-            <div className="rounded-3xl border border-[#E8DDC7] bg-white p-6 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-bold uppercase tracking-wide text-[#C8864B]">J'enseigne ({teaches.length})</p>
-                <button onClick={() => setAddingSkill('teach')}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#252840] text-white text-xs font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 1v8M1 5h8"/></svg>
-                  Ajouter
-                </button>
-              </div>
-              {teaches.length === 0
-                ? <p className="text-sm text-[#756B5B] italic">Aucune compétence ajoutée.</p>
-                : <div className="flex flex-wrap gap-2">
-                    {teaches.map(ts => (
-                      <span key={ts.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#252840] px-3 py-1.5 text-xs font-semibold text-[#F8F4EA]">
-                        {ts.skill?.name ?? ts}
-                        <button onClick={() => handleRemoveSkill(ts.id, 'teach')}
-                          className="h-4 w-4 rounded-full bg-white/20 flex items-center justify-center cursor-pointer border-none hover:bg-red-400 transition-colors">
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l6 6M7 1L1 7"/></svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-              }
-            </div>
-            <div className="rounded-3xl border border-[#E8DDC7] bg-white p-6 shadow-card">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-sm font-bold uppercase tracking-wide text-[#3D5C28]">Je veux apprendre ({wants.length})</p>
-                <button onClick={() => setAddingSkill('learn')}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#3D5C28] text-white text-xs font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-colors">
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 1v8M1 5h8"/></svg>
-                  Ajouter
-                </button>
-              </div>
-              {wants.length === 0
-                ? <p className="text-sm text-[#756B5B] italic">Aucun objectif ajouté.</p>
-                : <div className="flex flex-wrap gap-2">
-                    {wants.map(lg => (
-                      <span key={lg.id} className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(61,92,40,0.15)] border border-[rgba(61,92,40,0.25)] px-3 py-1.5 text-xs font-semibold text-[#3D5C28]">
-                        {lg.skill?.name ?? lg}
-                        <button onClick={() => handleRemoveSkill(lg.id, 'learn')}
-                          className="h-4 w-4 rounded-full bg-[#3D5C28]/20 flex items-center justify-center cursor-pointer border-none hover:bg-red-400 hover:text-white transition-colors">
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l6 6M7 1L1 7"/></svg>
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-              }
-            </div>
-          </div>
-        )}
+        {/* Tab body */}
+        <div className="mt-6 rounded-3xl bg-white p-6 shadow-sm sm:p-8">
 
-        {/* ── Tab: Ma carte ── */}
-        {tab === 'card' && (
-          <div className="py-7 pb-16">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-
-              {/* Aperçu carte */}
-              <div className="bg-white rounded-3xl border border-black/[0.09] p-6 shadow-sm">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#7A6E5C] mb-4">Aperçu Connexions</p>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-[#252840] flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
-                    {avatar
-                      ? <img src={avatar} alt="" className="w-full h-full object-cover" />
-                      : initials
-                    }
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-bold text-[#252840]">{displayName}</p>
-                      {profile?.averageRating && (
-                        <span className="flex items-center gap-1 text-sm font-semibold text-[#C8864B]">
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="#C8864B">
-                            <path d="M6 1l1.5 3 3.5.5-2.5 2.5.5 3.5L6 9l-3 1.5.5-3.5L1 4.5 4.5 4z"/>
-                          </svg>
-                          {profile.averageRating}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-[#7A6E5C]">{profile?.bio?.slice(0, 50)}{profile?.bio?.length > 50 ? '…' : ''}</p>
-                  </div>
-                </div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#7A6E5C] mb-2">Enseigne</p>
-                <div className="flex flex-wrap gap-1">
-                  {teaches.slice(0, 4).map(ts => (
-                    <span key={ts.id} className="px-2.5 py-1 rounded-lg bg-[#252840] text-white text-xs font-semibold">
+          {/* Compétences */}
+          {tab === 'skills' && (
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#C8864B] mb-3">J'enseigne ({teaches.length})</p>
+                <div className="flex flex-wrap gap-2">
+                  {teaches.map(ts => (
+                    <span key={ts.id} className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(200,134,75,0.12)] px-3 py-1.5 text-xs font-semibold text-[#C8864B]">
                       {ts.skill?.name ?? ts}
+                      <button onClick={() => handleRemoveSkill(ts.id, 'teach')}
+                        className="h-4 w-4 rounded-full bg-[#C8864B]/20 flex items-center justify-center cursor-pointer border-none hover:bg-red-400 hover:text-white transition-colors">
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l6 6M7 1L1 7"/></svg>
+                      </button>
                     </span>
+                  ))}
+                  <button onClick={() => setAddingSkill('teach')}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#E8DDC7] px-3 py-1.5 text-xs text-[#756B5B] cursor-pointer hover:border-[#C8864B] hover:text-[#C8864B] bg-transparent transition">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 1v8M1 5h8"/></svg>
+                    Ajouter
+                  </button>
+                </div>
+                {teaches.length === 0 && <p className="text-sm text-[#756B5B] italic mt-2">Aucune compétence ajoutée.</p>}
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#3D5C28] mb-3">Je veux apprendre ({wants.length})</p>
+                <div className="flex flex-wrap gap-2">
+                  {wants.map(lg => (
+                    <span key={lg.id} className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(61,92,40,0.12)] px-3 py-1.5 text-xs font-semibold text-[#3D5C28]">
+                      {lg.skill?.name ?? lg}
+                      <button onClick={() => handleRemoveSkill(lg.id, 'learn')}
+                        className="h-4 w-4 rounded-full bg-[#3D5C28]/20 flex items-center justify-center cursor-pointer border-none hover:bg-red-400 hover:text-white transition-colors">
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M1 1l6 6M7 1L1 7"/></svg>
+                      </button>
+                    </span>
+                  ))}
+                  <button onClick={() => setAddingSkill('learn')}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#E8DDC7] px-3 py-1.5 text-xs text-[#756B5B] cursor-pointer hover:border-[#3D5C28] hover:text-[#3D5C28] bg-transparent transition">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 1v8M1 5h8"/></svg>
+                    Ajouter
+                  </button>
+                </div>
+                {wants.length === 0 && <p className="text-sm text-[#756B5B] italic mt-2">Aucun objectif ajouté.</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Ma carte */}
+          {tab === 'card' && (
+            <div className="grid gap-6 lg:grid-cols-[1fr_280px] lg:items-start">
+              <div>
+                <h3 className="text-xl font-bold text-[#252840] mb-2">Ma carte de visite</h3>
+                <p className="text-sm text-[#756B5B] mb-5">Cette carte s'affiche pour les autres élèves dans la page Connexions.</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { label: 'Modifier nom / bio',         action: () => startEdit() },
+                    { label: 'Changer photo de profil',    action: () => fileRef.current?.click() },
+                    { label: 'Gérer mes compétences',      action: () => setTab('skills') },
+                    { label: 'Configurer disponibilités',  action: () => setTab('availability') },
+                  ].map(item => (
+                    <button key={item.label} onClick={item.action}
+                      className="flex items-center justify-between w-full px-4 py-3.5 rounded-2xl bg-[#F8F4EA] hover:bg-[#F0EAE0] border-none cursor-pointer transition-colors text-left">
+                      <span className="text-sm font-semibold text-[#252840]">{item.label}</span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#7A6E5C" strokeWidth="2" strokeLinecap="round"><path d="M6 3l5 5-5 5"/></svg>
+                    </button>
                   ))}
                 </div>
               </div>
-
-              {/* Actions rapides */}
-              <div className="flex flex-col gap-3">
-                {[
-                  { label: 'Modifier nom/bio',           tab: 'edit'         },
-                  { label: 'Changer photo',               tab: 'photo'        },
-                  { label: 'Gérer compétences',           tab: 'skills'       },
-                  { label: 'Configurer disponibilités',   tab: 'availability' },
-                ].map(action => (
-                  <button key={action.label}
-                    onClick={() => {
-                      if (action.tab === 'skills')       setTab('skills')
-                      if (action.tab === 'availability') setTab('availability')
-                      if (action.tab === 'edit')         startEdit()
-                      if (action.tab === 'photo')        fileRef.current?.click()
-                    }}
-                    className="flex items-center justify-between w-full px-5 py-4 rounded-2xl bg-white border border-black/[0.09] hover:border-[#252840] hover:shadow-sm transition-all text-left cursor-pointer">
-                    <span className="font-semibold text-[#252840] text-sm">{action.label}</span>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#7A6E5C" strokeWidth="2" strokeLinecap="round">
-                      <path d="M6 3l5 5-5 5"/>
-                    </svg>
-                  </button>
-                ))}
+              <div className="relative overflow-hidden rounded-3xl p-6 text-white shadow-xl"
+                style={{ background: 'linear-gradient(135deg,#252840,#3F6B4C)' }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-14 w-14 rounded-2xl overflow-hidden bg-[#C8864B]/30 flex items-center justify-center flex-shrink-0">
+                    {avatar
+                      ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                      : <span className="text-white font-black text-lg">{initials}</span>
+                    }
+                  </div>
+                  <div>
+                    <p className="font-bold text-lg text-white leading-tight">{displayName}</p>
+                    <p className="text-xs text-white/70 mt-0.5">{user?.email}</p>
+                  </div>
+                </div>
+                {teaches.length > 0 && (
+                  <div>
+                    <p className="text-xs text-white/60 mb-2">Enseigne</p>
+                    <div className="flex flex-wrap gap-1">
+                      {teaches.slice(0, 4).map(ts => (
+                        <span key={ts.id} className="px-2.5 py-1 rounded-lg bg-white/15 text-white text-xs font-semibold">
+                          {ts.skill?.name ?? ts}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="absolute bottom-4 right-4 text-[9px] text-white/30 font-bold uppercase tracking-widest">SkillBridge</p>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── Tab: Disponibilités ── */}
-        {tab === 'availability' && (
-          <div className="py-7 pb-16">
-            <h2 className="text-xl font-black text-[#252840] mb-1">Mes créneaux disponibles</h2>
-            <p className="text-sm text-[#756B5B] mb-5">L'heure exacte se convient dans le chat avec votre pair.</p>
-            <div className="overflow-hidden rounded-3xl border border-[#E8DDC7] bg-white shadow-card">
-              <div className="grid bg-[#F8F4EA]" style={{ gridTemplateColumns: '100px repeat(5, 1fr)' }}>
-                <div className="p-3" />
-                {DAYS.map(day => (
-                  <div key={day} className="p-3 text-center text-xs font-bold text-[#252840] border-l border-[#E8DDC7]">{day}</div>
-                ))}
-              </div>
-              {SLOTS.map((slot, si) => (
-                <div key={slot} className={`grid ${si < SLOTS.length - 1 ? 'border-t border-[#E8DDC7]' : ''}`} style={{ gridTemplateColumns: '100px repeat(5, 1fr)' }}>
-                  <div className="p-3 flex flex-col justify-center">
-                    <p className="text-xs font-bold text-[#252840]">{slot}</p>
-                    <p className="text-[10px] text-[#756B5B]">{SLOT_HINTS[slot]}</p>
+          {/* Disponibilités */}
+          {tab === 'availability' && (
+            <div>
+              <h2 className="text-xl font-black text-[#252840] mb-1">Mes créneaux disponibles</h2>
+              <p className="text-sm text-[#756B5B] mb-5">L'heure exacte se convient dans le chat avec votre pair.</p>
+              <div className="overflow-x-auto rounded-2xl border border-[#E8DDC7]">
+                <div style={{ minWidth: '480px' }}>
+                  <div className="grid bg-[#F8F4EA]" style={{ gridTemplateColumns: '100px repeat(5, 1fr)' }}>
+                    <div className="p-3" />
+                    {DAYS.map(day => (
+                      <div key={day} className="p-3 text-center text-xs font-bold text-[#252840] border-l border-[#E8DDC7]">{day}</div>
+                    ))}
                   </div>
-                  {DAYS.map(day => {
-                    const active = !!avail[`${day}_${slot}`]
+                  {SLOTS.map((slot, si) => (
+                    <div key={slot} className={`grid ${si < SLOTS.length - 1 ? 'border-t border-[#E8DDC7]' : ''}`} style={{ gridTemplateColumns: '100px repeat(5, 1fr)' }}>
+                      <div className="p-3 flex flex-col justify-center">
+                        <p className="text-xs font-bold text-[#252840]">{slot}</p>
+                        <p className="text-[10px] text-[#756B5B]">{SLOT_HINTS[slot]}</p>
+                      </div>
+                      {DAYS.map(day => {
+                        const active = !!avail[`${day}_${slot}`]
+                        return (
+                          <button key={day} onClick={() => toggleSlot(day, slot)}
+                            className={`border-l border-[#E8DDC7] p-3 flex items-center justify-center cursor-pointer transition-all ${active ? 'bg-[#3D5C28] hover:bg-[#4E6035]' : 'bg-white hover:bg-[#F8F4EA]'}`}>
+                            {active
+                              ? <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M3 8l3.5 3.5L13 4"/></svg>
+                              : <div className="w-4 h-4 rounded border-[1.5px] border-[#D0C8B8]" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <button onClick={handleSaveAvail}
+                  className="px-6 py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors">
+                  Enregistrer
+                </button>
+                {availSaved && (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#3D5C28]">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 7l4 4 6-6"/></svg>
+                    Enregistré
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Sessions */}
+          {tab === 'sessions' && (
+            <div>
+              {sessions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-lg font-semibold text-[#252840] mb-4">Aucune séance pour l'instant</p>
+                  <button onClick={() => navigate('/sessions/new')}
+                    className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
+                    Créer une séance
+                  </button>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[#F0EAE0]">
+                  {sessions.map(s => {
+                    const isTeacher = s.teacher?.id === user?.id
+                    const partner   = isTeacher ? s.learner : s.teacher
+                    const statusMap = {
+                      SCHEDULED: { label: 'À venir',   cls: 'bg-[rgba(61,92,40,0.12)] text-[#3D5C28]' },
+                      ACTIVE:    { label: 'En direct',  cls: 'bg-[rgba(200,134,75,0.15)] text-[#C8864B]' },
+                      COMPLETED: { label: 'Terminée',   cls: 'bg-[rgba(37,40,64,0.1)] text-[#252840]' },
+                      CANCELLED: { label: 'Annulée',    cls: 'bg-red-50 text-red-500' },
+                    }
+                    const st = statusMap[s.status] ?? statusMap.SCHEDULED
                     return (
-                      <button key={day} onClick={() => toggleSlot(day, slot)}
-                        className={`border-l border-[#E8DDC7] p-3 flex items-center justify-center cursor-pointer transition-all ${active ? 'bg-[#3D5C28] hover:bg-[#4E6035]' : 'bg-white hover:bg-[#F8F4EA]'}`}>
-                        {active
-                          ? <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M3 8l3.5 3.5L13 4"/></svg>
-                          : <div className="w-4 h-4 rounded border-[1.5px] border-[#D0C8B8]" />}
-                      </button>
+                      <li key={s.id} onClick={() => navigate(`/sessions/${s.id}`)}
+                        className="flex items-center gap-4 py-4 cursor-pointer hover:bg-[#F8F4EA] rounded-xl px-2 transition-colors -mx-2">
+                        <div className="h-11 w-11 rounded-2xl bg-[#252840] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                          {partner?.firstName?.[0]}{partner?.lastName?.[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-bold text-[#252840] truncate">{s.title}</span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold flex-shrink-0 ${st.cls}`}>{st.label}</span>
+                          </div>
+                          <p className="text-xs text-[#756B5B]">{isTeacher ? 'Tu enseignes' : 'Tu apprends'} · {partner?.firstName} {partner?.lastName} · {formatDate(s.startsAt)}</p>
+                        </div>
+                        <p className={`text-sm font-black flex-shrink-0 ${isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>
+                          {isTeacher ? '+' : '-'}{s.creditsReserved} cr
+                        </p>
+                      </li>
                     )
                   })}
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <button onClick={handleSaveAvail}
-                className="px-6 py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors">
-                Enregistrer
-              </button>
-              {availSaved && (
-                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#3D5C28]">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 7l4 4 6-6"/></svg>
-                  Enregistré
-                </span>
+                </ul>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ── Tab: Sessions ── */}
-        {tab === 'sessions' && (
-          <div className="py-7 pb-16">
-            {sessions.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-[#E8DDC7] bg-white p-12 text-center shadow-card">
-                <p className="text-lg font-semibold text-[#252840] mb-4">Aucune séance pour l'instant</p>
-                <button onClick={() => navigate('/sessions/new')}
-                  className="px-6 py-3 rounded-full bg-[#252840] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
-                  Créer une séance
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {sessions.map(s => {
-                  const isTeacher = s.teacher?.id === user?.id
-                  const partner   = isTeacher ? s.learner : s.teacher
-                  const statusMap = {
-                    SCHEDULED: { label: 'À venir',   cls: 'bg-[rgba(61,92,40,0.12)] text-[#3D5C28]' },
-                    ACTIVE:    { label: 'En direct',  cls: 'bg-[rgba(200,134,75,0.15)] text-[#C8864B]' },
-                    COMPLETED: { label: 'Terminée',   cls: 'bg-[rgba(37,40,64,0.1)] text-[#252840]' },
-                    CANCELLED: { label: 'Annulée',    cls: 'bg-red-50 text-red-500' },
-                  }
-                  const st = statusMap[s.status] ?? statusMap.SCHEDULED
-                  return (
-                    <div key={s.id} onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="rounded-3xl border border-[#E8DDC7] bg-white p-5 flex items-center gap-4 cursor-pointer hover:shadow-soft transition-all shadow-card">
-                      <div className="h-12 w-12 rounded-full bg-[#252840] text-white flex items-center justify-center font-bold text-base flex-shrink-0">
-                        {partner?.firstName?.[0]}{partner?.lastName?.[0]}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-bold text-[#252840] truncate">{s.title}</span>
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold flex-shrink-0 ${st.cls}`}>{st.label}</span>
+          {/* Historique */}
+          {tab === 'transactions' && (
+            <div>
+              {sessions.filter(s => s.status === 'COMPLETED').length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-lg font-semibold text-[#252840] mb-1">Aucune transaction</p>
+                  <p className="text-sm text-[#756B5B]">Les crédits apparaissent ici après vos séances.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-[#F0EAE0]">
+                  {sessions.filter(s => s.status === 'COMPLETED').map(s => {
+                    const isTeacher = s.teacher?.id === user?.id
+                    const partner   = isTeacher ? s.learner : s.teacher
+                    const delta     = isTeacher ? s.creditsConsumed : -(s.creditsConsumed)
+                    return (
+                      <li key={s.id} className="flex items-center justify-between py-3 text-sm">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isTeacher ? 'bg-[rgba(61,92,40,0.12)]' : 'bg-[rgba(200,134,75,0.12)]'}`}>
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={isTeacher ? '#3D5C28' : '#C8864B'} strokeWidth="1.6" strokeLinecap="round">
+                              {isTeacher ? <path d="M8 14V2M3 7l5-5 5 5"/> : <path d="M8 2v12M3 9l5 5 5-5"/>}
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[#252840]">{s.title}</p>
+                            <p className="text-xs text-[#756B5B]">{isTeacher ? 'Donnée à' : 'Reçue de'} {partner?.firstName} {partner?.lastName} · {formatDate(s.actualEndedAt)}</p>
+                          </div>
                         </div>
-                        <p className="text-xs text-[#756B5B]">{isTeacher ? 'Receveur' : 'Donneur'} : {partner?.firstName} {partner?.lastName} · {formatDate(s.startsAt)}</p>
-                      </div>
-                      <p className={`text-sm font-black flex-shrink-0 ${isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>
-                        {isTeacher ? '+' : '-'}{s.creditsReserved} cr
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+                        <p className={`text-base font-black flex-shrink-0 ${isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>
+                          {delta > 0 ? '+' : ''}{delta} cr
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
 
-        {/* ── Tab: Historique ── */}
-        {tab === 'transactions' && (
-          <div className="py-7 pb-16">
-            {sessions.filter(s => s.status === 'COMPLETED').length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-[#E8DDC7] bg-white p-12 text-center shadow-card">
-                <p className="text-lg font-semibold text-[#252840] mb-1">Aucune transaction</p>
-                <p className="text-sm text-[#756B5B]">Les crédits apparaissent ici après vos séances.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {sessions.filter(s => s.status === 'COMPLETED').map(s => {
-                  const isTeacher = s.teacher?.id === user?.id
-                  const partner   = isTeacher ? s.learner : s.teacher
-                  const delta     = isTeacher ? s.creditsConsumed : -(s.creditsConsumed)
-                  return (
-                    <div key={s.id} className="rounded-2xl border border-[#E8DDC7] bg-white px-5 py-4 flex items-center gap-4 shadow-card">
-                      <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isTeacher ? 'bg-[rgba(61,92,40,0.12)]' : 'bg-[rgba(200,134,75,0.12)]'}`}>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={isTeacher ? '#3D5C28' : '#C8864B'} strokeWidth="1.6" strokeLinecap="round">
-                          {isTeacher ? <path d="M8 14V2M3 7l5-5 5 5"/> : <path d="M8 2v12M3 9l5 5 5-5"/>}
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-[#252840] truncate">{s.title}</p>
-                        <p className="text-xs text-[#756B5B]">{isTeacher ? 'Donnée à' : 'Reçue de'} {partner?.firstName} {partner?.lastName} · {formatDate(s.actualEndedAt)}</p>
-                      </div>
-                      <p className={`text-base font-black flex-shrink-0 ${isTeacher ? 'text-[#3D5C28]' : 'text-[#C8864B]'}`}>
-                        {delta > 0 ? '+' : ''}{delta} cr
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </div>
     </main>
   )

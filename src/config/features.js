@@ -1,3 +1,6 @@
-export const PAYMENTS_ENABLED       = false
-export const FILE_UPLOAD_ENABLED    = false
-export const GROUP_SESSIONS_ENABLED = false
+export const FILE_UPLOAD_ENABLED     = false
+export const GROUP_SESSIONS_ENABLED  = false
+export const CHAT_DELETE_ENABLED     = false
+export const CHAT_ARCHIVE_ENABLED    = true
+export const GROUP_CHAT_ENABLED      = false
+export const CHAT_PIN_ENABLED        = false

@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Search, Star, Send, X } from 'lucide-react'
 import useAuthStore from '../store/authStore'
 import api from '../services/api'
 import { CATEGORIES, SKILL_TO_CATEGORY } from '../data/categories'
+import Reveal from '../components/Reveal'
+import { useToast } from '../components/Toast'
 
 const COLORS = ['#252840', '#C8864B', '#3D5C28', '#363B6B']
 
@@ -32,10 +35,10 @@ function AvatarCircle({ user: u, name, color, size = 56 }) {
   const initials = name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
   const sz = size === 64 ? 'h-16 w-16 text-xl' : 'h-14 w-14 text-base'
   if (u?.avatarUrl) {
-    return <img src={u.avatarUrl} alt={name} className={`${sz} rounded-full object-cover flex-shrink-0`} />
+    return <img src={u.avatarUrl} alt={name} className={`${sz} rounded-2xl object-cover flex-shrink-0`} />
   }
   return (
-    <div className={`${sz} rounded-full flex items-center justify-center font-bold text-white flex-shrink-0`} style={{ background: color }}>
+    <div className={`${sz} rounded-2xl flex items-center justify-center font-bold text-white flex-shrink-0`} style={{ background: color }}>
       {initials}
     </div>
   )
@@ -43,17 +46,18 @@ function AvatarCircle({ user: u, name, color, size = 56 }) {
 
 const DAYS  = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi']
 const SLOTS = ['Matin', 'Midi', 'Soir']
-const SLOT_HINTS = { Matin: '8h–12h', Midi: '12h–14h', Soir: '18h–22h' }
 
 const FILTERS = [{ key: 'all', label: 'Tous' }, ...CATEGORIES.filter(c => c.key !== 'all')]
 
 export default function Connection() {
   const { user, openModal } = useAuthStore()
+  const addToast = useToast()
 
-  const [tab,      setTab]      = useState('discover')
-  const [filter,   setFilter]   = useState('all')
-  const [search,   setSearch]   = useState('')
-  const [selected, setSelected] = useState(null)
+  const [tab,       setTab]       = useState('discover')
+  const [filter,    setFilter]    = useState('all')
+  const [search,    setSearch]    = useState('')
+  const [selected,  setSelected]  = useState(null)
+  const [pickedSlots, setPickedSlots] = useState({})
 
   const [incoming,  setIncoming]  = useState([])
   const [requested, setRequested] = useState(new Set())
@@ -82,10 +86,13 @@ export default function Connection() {
     return () => clearInterval(id)
   }, [loadData])
 
+  useEffect(() => {
+    setPickedSlots({})
+  }, [selected?.id])
+
   const myGoals  = (myProfile?.learningGoals  || []).map(g => g.skill?.name ?? g)
   const mySkills = (myProfile?.teachingSkills || []).map(s => s.skill?.name ?? s)
 
-  // Set des IDs de compétences que je veux apprendre (+ fallback par nom)
   const mySkillGoalIds = new Set(
     (myProfile?.learningGoals || []).map(g => g.skill?.id).filter(Boolean)
   )
@@ -93,18 +100,15 @@ export default function Connection() {
   const members = allUsers.map(u => {
     const teachesNames = (u.teachingSkills || []).map(s => s.skill?.name ?? '')
     const wantsNames   = (u.learningGoals  || []).map(s => s.skill?.name ?? '')
-
-    // Objets complets avec booléen isMatch, matchés triés en premier
-    const teachesObjs = (u.teachingSkills || [])
+    const teachesObjs  = (u.teachingSkills || [])
       .map(s => {
-        const name = s.skill?.name ?? ''
-        const id   = s.skill?.id   ?? null
+        const name    = s.skill?.name ?? ''
+        const id      = s.skill?.id   ?? null
         const isMatch = mySkillGoalIds.has(id) ||
           myGoals.some(g => g.toLowerCase() === name.toLowerCase())
         return { id, name, isMatch }
       })
       .sort((a, b) => Number(b.isMatch) - Number(a.isMatch))
-
     return {
       id:            u.id,
       firstName:     u.firstName,
@@ -142,8 +146,9 @@ export default function Connection() {
       await api.post('/matches/request', { receiverId: memberId })
       setRequested(prev => new Set([...prev, memberId]))
       setSelected(null)
+      addToast?.('Demande envoyée', 'success')
     } catch (e) {
-      alert(e.response?.data?.message || 'Erreur lors de la demande')
+      addToast?.(e.response?.data?.message || 'Erreur lors de la demande', 'error')
     }
   }
 
@@ -152,7 +157,8 @@ export default function Connection() {
       await api.patch(`/matches/${matchId}`, { status: 'ACCEPTED' })
       setIncoming(prev => prev.filter(m => m.id !== matchId))
       setRequested(prev => new Set([...prev, requesterId]))
-    } catch (e) { alert(e.response?.data?.message || 'Erreur') }
+      addToast?.('Connexion acceptée', 'success')
+    } catch (e) { addToast?.(e.response?.data?.message || 'Erreur', 'error') }
   }
 
   const handleDecline = async (matchId) => {
@@ -163,110 +169,134 @@ export default function Connection() {
   }
 
   const memberAvail = selected ? getAvailFor(selected) : {}
-  const hasAvail    = Object.values(memberAvail).some(Boolean)
 
   return (
-    <main className="min-h-screen bg-[#FDFAF4]">
-      {/* Modal profil */}
+    <div className="min-h-screen" style={{ background: 'var(--cream)' }}>
+
+      {/* Modal */}
       {selected && (
         <div
-          className="fixed inset-0 z-[400] bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => setSelected(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-soft border border-[#E8DDC7]"
+            className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-soft border border-[#E8DDC7] animate-modal-in"
             onClick={e => e.stopPropagation()}
           >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+            <div className="p-6 space-y-5">
+              {/* Header */}
+              <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <AvatarCircle user={selected} name={`${selected.firstName} ${selected.lastName}`} color={selected.color} size={64} />
                   <div>
-                    <h2 className="text-2xl font-black text-[#252840]">{selected.firstName} {selected.lastName}</h2>
+                    <h2 className="text-xl font-bold text-[#252840]">{selected.firstName} {selected.lastName}</h2>
                     {selected.averageRating != null && (
-                      <p className="inline-flex items-center gap-1 text-sm font-semibold text-[#C8864B]">
-                        <svg width="13" height="13" viewBox="0 0 13 13" fill="#C8864B" stroke="#C8864B" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><polygon points="6.5,1 8.2,4.5 12,5.1 9.2,7.8 9.9,11.5 6.5,9.7 3.1,11.5 3.8,7.8 1,5.1 4.8,4.5"/></svg>
+                      <p className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--orange-warm)' }}>
+                        <Star className="h-3.5 w-3.5 fill-current" />
                         {Number(selected.averageRating).toFixed(1)}
                       </p>
                     )}
-                    {selected.bio && <p className="text-sm text-[#756B5B] mt-1">{selected.bio}</p>}
+                    {selected.bio && <p className="text-sm mt-0.5" style={{ color: 'var(--muted-foreground)' }}>{selected.bio}</p>}
                     {selected.score > 0 && (
-                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-[rgba(61,92,40,0.12)] text-[#3D5C28] text-xs font-bold">
+                      <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs font-bold" style={{ background: 'rgba(63,107,76,0.12)', color: 'var(--learn)' }}>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1.5 5l3 3 5-5"/></svg>
                         Correspond à vos objectifs
                       </span>
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelected(null)}
-                  className="h-8 w-8 rounded-full bg-[#F8F4EA] flex items-center justify-center border-none cursor-pointer hover:bg-[#E8DDC7] transition-colors text-[#756B5B]"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 1l10 10M11 1L1 11"/></svg>
+                <button onClick={() => setSelected(null)} className="h-8 w-8 rounded-full bg-[#F8F4EA] flex items-center justify-center border-none cursor-pointer hover:bg-[#E8DDC7]">
+                  <X size={14} className="text-[#756B5B]" />
                 </button>
               </div>
 
-              {selected.teaches.length > 0 && (
-                <div className="mb-4">
-                  <p className="text-xs font-bold text-[#252840] uppercase tracking-wide mb-2">Compétences enseignées</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selected.teaches.map(s => (
-                      <span key={s.id ?? s.name}
-                        className="inline-flex items-center gap-1 rounded-lg bg-[#252840] px-3 py-1.5 text-xs font-semibold text-[#F8F4EA]">
-                        {s.isMatch && (
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="#C8864B" stroke="none">
-                            <polygon points="5,0.5 6.2,3.4 9.5,3.8 7.2,6 7.9,9.3 5,7.7 2.1,9.3 2.8,6 0.5,3.8 3.8,3.4"/>
-                          </svg>
-                        )}
-                        {s.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <p className="text-xs font-bold text-[#252840] uppercase tracking-wide mb-2">Disponibilités</p>
-                {!hasAvail ? (
-                  <div className="bg-[#F8F4EA] rounded-2xl p-4 text-center">
-                    <p className="text-sm text-[#756B5B]">{selected.firstName} n'a pas encore renseigné ses disponibilités.</p>
-                  </div>
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-[#E8DDC7]">
-                    <div className="grid bg-[#F8F4EA] text-center text-xs font-semibold text-[#252840]" style={{ gridTemplateColumns: '64px repeat(5, 1fr)' }}>
-                      <div className="p-2" />
-                      {DAYS.map(d => <div key={d} className="p-2">{d.slice(0,3)}</div>)}
+              {/* Teaches + Wants */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {selected.teaches.length > 0 && (
+                  <div className="rounded-2xl p-4" style={{ background: 'var(--cream)' }}>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--orange-warm)' }}>Enseigne</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selected.teaches.map(s => (
+                        <span key={s.id ?? s.name}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold bg-white text-[#252840]">
+                          {s.isMatch && <Star className="h-3 w-3 fill-current text-[#C8864B] text-[#C8864B]" />}
+                          {s.name}
+                        </span>
+                      ))}
                     </div>
-                    {SLOTS.map(slot => (
-                      <div key={slot} className="grid border-t border-[#E8DDC7] text-center" style={{ gridTemplateColumns: '64px repeat(5, 1fr)' }}>
-                        <div className="bg-[#F8F4EA] p-2 text-xs font-semibold text-[#252840]">{slot}</div>
-                        {DAYS.map(day => {
-                          const active = !!memberAvail[`${day}_${slot}`]
-                          return (
-                            <div key={day} className="p-2">
-                              <span className={`mx-auto block h-5 w-5 rounded-md ${active ? 'bg-[#3D5C28]' : 'bg-[#F8F4EA]'}`} />
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ))}
+                  </div>
+                )}
+                {selected.wants.length > 0 && (
+                  <div className="rounded-2xl p-4" style={{ background: 'var(--cream)' }}>
+                    <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--learn)' }}>Veut apprendre</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selected.wants.map(w => (
+                        <span key={w} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold">{w}</span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
+              {/* Slot picker */}
+              <div>
+                <p className="text-sm font-bold text-[#252840]">Disponibilités</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--muted-foreground)' }}>Choisis un ou plusieurs créneaux.</p>
+                <div className="mt-3 overflow-x-auto rounded-2xl border border-[#E8DDC7]">
+                  <table className="text-center text-sm" style={{ minWidth: '380px', width: '100%' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--cream)' }}>
+                        <th className="p-2" />
+                        {DAYS.map(d => <th key={d} className="p-2 text-xs font-semibold text-[#252840]">{d.slice(0, 3)}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {SLOTS.map(slot => (
+                        <tr key={slot} className="border-t border-[#E8DDC7]">
+                          <td className="p-2 text-left text-xs font-semibold text-[#252840]" style={{ background: 'var(--cream)', whiteSpace: 'nowrap' }}>{slot}</td>
+                          {DAYS.map(day => {
+                            const k   = `${day}_${slot}`
+                            const avail = !!memberAvail[k]
+                            const picked = !!pickedSlots[k]
+                            return (
+                              <td key={k} className="p-1.5">
+                                <button
+                                  disabled={!avail}
+                                  onClick={() => setPickedSlots(p => ({ ...p, [k]: !p[k] }))}
+                                  className="h-8 w-full rounded-lg text-xs font-semibold transition"
+                                  style={{
+                                    background: !avail ? 'var(--cream)' : picked ? 'var(--orange-warm)' : 'white',
+                                    color: !avail ? 'rgba(117,107,91,0.4)' : picked ? 'white' : 'var(--ink)',
+                                    cursor: avail ? 'pointer' : 'not-allowed',
+                                    border: 'none',
+                                    minWidth: '52px',
+                                  }}
+                                >
+                                  {avail ? (picked ? '✓' : 'Libre') : '—'}
+                                </button>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* CTA */}
               {requested.has(selected.id) ? (
-                <div className="w-full py-3 rounded-full bg-[rgba(61,92,40,0.12)] text-[#3D5C28] text-sm font-bold text-center">
-                  <span className="inline-flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6l4 4 6-6"/></svg>
-                    Demande envoyée
-                  </span>
+                <div className="rounded-2xl p-4 text-center text-sm font-semibold" style={{ background: 'rgba(63,107,76,0.10)', color: 'var(--learn)' }}>
+                  Demande envoyée — tu recevras une notification.
                 </div>
               ) : (
                 <button
                   onClick={() => handleConnect(selected.id)}
                   disabled={!user}
-                  className="w-full py-3 rounded-full bg-[#C8864B] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#B07030] transition-colors disabled:opacity-50"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full py-3 font-bold text-white transition hover:-translate-y-0.5 border-none cursor-pointer disabled:opacity-50"
+                  style={{ background: 'var(--orange-warm)' }}
                 >
+                  <Send size={16} />
                   {!user ? 'Connectez-vous pour réserver' : 'Envoyer une demande de réservation'}
                 </button>
               )}
@@ -275,185 +305,204 @@ export default function Connection() {
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-        {/* Header */}
-        <h1 className="text-4xl font-black tracking-tight text-[#252840]">Connexions</h1>
-        <p className="mt-2 text-[#756B5B]">
-          {user ? 'Trouve un membre compatible et apprends en échangeant.' : 'Connectez-vous pour voir les membres.'}
-        </p>
-
-        {/* Tabs */}
-        <div className="mt-6 inline-flex rounded-full border border-[#E8DDC7] bg-[#F8F4EA] p-1">
-          {['Découvrir', 'Demandes'].map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t === 'Découvrir' ? 'discover' : 'requests')}
-              className={`rounded-full px-5 py-2 text-sm font-semibold border-none cursor-pointer transition-colors ${
-                (t === 'Découvrir' ? tab === 'discover' : tab === 'requests')
-                  ? 'bg-[#252840] text-[#F8F4EA]'
-                  : 'bg-transparent text-[#756B5B] hover:text-[#252840]'
-              }`}
-            >
-              {t}{t === 'Demandes' && incoming.length > 0 ? ` (${incoming.length})` : ''}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="mt-6 max-w-xl">
-          <div className="relative">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B0A898]" width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <circle cx="8" cy="8" r="6"/><path d="M14 14l2 2"/>
-            </svg>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Rechercher une compétence ou un membre…"
-              className="h-12 w-full rounded-full border border-[#E8DDC7] bg-white pl-12 pr-4 text-base outline-none focus:border-[#C8864B] transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Filter chips */}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {FILTERS.slice(0, 7).map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`rounded-full border px-4 py-2 text-sm font-medium cursor-pointer transition-colors ${
-                filter === f.key
-                  ? 'border-[#C8864B] bg-[#C8864B] text-white'
-                  : 'border-[#E8DDC7] bg-white text-[#756B5B] hover:border-[rgba(200,134,75,0.5)]'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Onglet Demandes */}
-        {tab === 'requests' && (
-          <div className="mt-8">
-            {incoming.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-[#E8DDC7] bg-white p-12 text-center">
-                <p className="text-lg font-semibold text-[#252840]">Aucune demande en attente</p>
-                <p className="mt-1 text-[#756B5B]">Les demandes de réservation que tu reçois apparaîtront ici.</p>
+      {/* Page header */}
+      <section className="relative overflow-hidden py-16" style={{ background: 'var(--cream)' }}>
+        <div className="relative mx-auto max-w-7xl px-6">
+          <Reveal>
+            <p className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--orange-warm)' }}>Connexions</p>
+          </Reveal>
+          <Reveal delay={1}>
+            <h1 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Avec qui veux-tu apprendre aujourd'hui ?
+            </h1>
+          </Reveal>
+          <Reveal delay={2}>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="relative flex-1 max-w-xl">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Cherche par nom, matière, techno…"
+                  className="w-full rounded-full border border-[#E8DDC7] bg-white py-3 pl-11 pr-5 text-sm shadow-sm outline-none transition"
+                  style={{ '--tw-ring-color': 'var(--orange-warm)' }}
+                  onFocus={e => e.target.style.borderColor = 'var(--orange-warm)'}
+                  onBlur={e  => e.target.style.borderColor = '#E8DDC7'}
+                />
               </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {incoming.map(m => (
-                  <div key={m.id} className="rounded-3xl border border-[#E8DDC7] bg-white p-5 flex items-center gap-4 shadow-card">
-                    <div className="h-12 w-12 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0" style={{ background: colorFor(m.requesterId) }}>
-                      {(m.requester?.firstName?.[0] ?? '') + (m.requester?.lastName?.[0] ?? '')}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-[#252840]">{m.requester?.firstName} {m.requester?.lastName}</p>
-                      <p className="text-sm text-[#756B5B]">souhaite se connecter avec vous</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button onClick={() => handleAccept(m.id, m.requesterId)}
-                        className="px-4 py-2 rounded-full bg-[#3D5C28] text-white text-sm font-bold border-none cursor-pointer hover:bg-[#4E6035] transition-colors">
-                        Accepter
-                      </button>
-                      <button onClick={() => handleDecline(m.id)}
-                        className="px-4 py-2 rounded-full border border-[#E8DDC7] text-[#756B5B] text-sm font-semibold bg-transparent cursor-pointer hover:border-red-300 hover:text-red-500 transition-colors">
-                        Décliner
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Onglet Découvrir */}
-        {tab === 'discover' && (
-          <div className="mt-8">
-            {!user ? (
-              <div className="text-center py-20">
-                <p className="text-lg font-semibold text-[#252840] mb-4">Connectez-vous pour voir les membres</p>
-                <button onClick={() => openModal('login')}
-                  className="px-6 py-3 rounded-full bg-[#252840] text-white font-bold border-none cursor-pointer hover:bg-[#363B6B] transition-colors">
-                  Se connecter
+            </div>
+          </Reveal>
+          <Reveal delay={3}>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {FILTERS.slice(0, 8).map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className="rounded-full px-4 py-2 text-sm font-semibold transition cursor-pointer border"
+                  style={{
+                    background: filter === f.key ? 'var(--ink)' : 'white',
+                    color:      filter === f.key ? 'white' : 'var(--ink)',
+                    borderColor: filter === f.key ? 'var(--ink)' : 'var(--border)',
+                  }}
+                >
+                  {f.label}
                 </button>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-lg font-semibold text-[#252840] mb-2">Aucun membre trouvé</p>
-                <p className="text-sm text-[#756B5B]">Essayez une autre catégorie ou invitez des amis.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {filtered.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => setSelected(m)}
-                    className="group flex flex-col rounded-3xl border border-[#E8DDC7] bg-white p-6 text-left shadow-card transition-transform hover:-translate-y-1 cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <AvatarCircle user={m} name={`${m.firstName} ${m.lastName}`} color={m.color} />
-                        <div>
-                          <p className="font-bold text-[#252840]">{m.firstName} {m.lastName}</p>
-                          {m.averageRating != null && (
-                            <p className="inline-flex items-center gap-1 text-sm font-semibold text-[#C8864B]">
-                              <svg width="12" height="12" viewBox="0 0 12 12" fill="#C8864B" stroke="#C8864B" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><polygon points="6,1 7.5,4.2 11,4.6 8.5,7 9.2,10.5 6,8.8 2.8,10.5 3.5,7 1,4.6 4.5,4.2"/></svg>
-                              {Number(m.averageRating).toFixed(1)}
-                            </p>
-                          )}
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* Tabs */}
+      <div className="mx-auto max-w-7xl px-6 pb-3">
+        <div className="inline-flex rounded-full border border-[#E8DDC7] p-1" style={{ background: 'var(--cream)' }}>
+          {['Découvrir', 'Demandes'].map(t => {
+            const active = t === 'Découvrir' ? tab === 'discover' : tab === 'requests'
+            return (
+              <button
+                key={t}
+                onClick={() => setTab(t === 'Découvrir' ? 'discover' : 'requests')}
+                className="rounded-full px-5 py-2 text-sm font-semibold border-none cursor-pointer transition-colors"
+                style={{ background: active ? 'var(--ink)' : 'transparent', color: active ? 'white' : 'var(--muted-foreground)' }}
+              >
+                {t}{t === 'Demandes' && incoming.length > 0 ? ` (${incoming.length})` : ''}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Content */}
+      <section className="relative py-8">
+        <div className="relative mx-auto max-w-7xl px-6">
+
+          {/* Requests tab */}
+          {tab === 'requests' && (
+            <div>
+              {incoming.length === 0 ? (
+                <p className="rounded-3xl bg-white p-8 text-center shadow-sm" style={{ color: 'var(--muted-foreground)' }}>
+                  Aucune demande en attente.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {incoming.map(m => (
+                    <div key={m.id} className="rounded-3xl border border-[#E8DDC7] bg-white p-5 flex flex-col gap-3 sm:flex-row sm:items-center shadow-sm">
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="h-12 w-12 rounded-full flex items-center justify-center font-bold text-white text-sm flex-shrink-0" style={{ background: colorFor(m.requesterId) }}>
+                          {(m.requester?.firstName?.[0] ?? '') + (m.requester?.lastName?.[0] ?? '')}
                         </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-[#252840] truncate">{m.requester?.firstName} {m.requester?.lastName}</p>
+                          <p className="text-sm" style={{ color: 'var(--muted-foreground)' }}>souhaite se connecter avec vous</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => handleAccept(m.id, m.requesterId)}
+                          className="flex-1 sm:flex-none px-4 py-2 rounded-full text-white text-sm font-bold border-none cursor-pointer transition"
+                          style={{ background: 'var(--learn)' }}>
+                          Accepter
+                        </button>
+                        <button onClick={() => handleDecline(m.id)}
+                          className="flex-1 sm:flex-none px-4 py-2 rounded-full border border-[#E8DDC7] text-sm font-semibold bg-transparent cursor-pointer hover:border-red-300 hover:text-red-500 transition"
+                          style={{ color: 'var(--muted-foreground)' }}>
+                          Décliner
+                        </button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-                    {m.bio && <p className="mt-3 text-sm text-[#756B5B]">{m.bio}</p>}
-
-                    {m.teaches.length > 0 && (
-                      <div className="mt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[#756B5B] mb-2">Enseigne</p>
-                        <div className="flex flex-wrap gap-2">
-                          {m.teaches.slice(0, 4).map(s => (
-                            <span key={s.id ?? s.name}
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#252840] px-2.5 py-1 text-xs font-semibold text-[#F8F4EA]">
-                              {s.isMatch && (
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="#C8864B" stroke="none">
-                                  <polygon points="5,0.5 6.2,3.4 9.5,3.8 7.2,6 7.9,9.3 5,7.7 2.1,9.3 2.8,6 0.5,3.8 3.8,3.4"/>
-                                </svg>
-                              )}
-                              {s.name}
-                            </span>
-                          ))}
-                          {m.teaches.length > 4 && <span className="text-xs text-[#756B5B]">+{m.teaches.length - 4}</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {m.score > 0 && (
-                      <span className="mt-4 inline-flex items-center gap-1.5 self-start rounded-full bg-[rgba(61,92,40,0.12)] px-3 py-1 text-xs font-semibold text-[#3D5C28]">
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1.5 5l3 3 5-5"/></svg>
-                        Correspond à vos objectifs
-                      </span>
-                    )}
-
-                    {requested.has(m.id) ? (
-                      <div className="mt-5 w-full py-2 rounded-full bg-[rgba(61,92,40,0.12)] text-[#3D5C28] text-sm font-bold text-center">
-                        <span className="inline-flex items-center gap-1.5">
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6l4 4 6-6"/></svg>
-                    Demande envoyée
-                  </span>
-                      </div>
-                    ) : (
-                      <div className="mt-5 w-full py-2 rounded-full bg-[#252840] text-[#F8F4EA] text-sm font-bold text-center">
-                        Réserver
-                      </div>
-                    )}
+          {/* Discover tab */}
+          {tab === 'discover' && (
+            <>
+              {!user ? (
+                <div className="text-center py-20">
+                  <p className="text-lg font-semibold text-[#252840] mb-4">Connecte-toi pour voir les membres</p>
+                  <button onClick={() => openModal('login')}
+                    className="px-6 py-3 rounded-full text-white font-bold border-none cursor-pointer transition"
+                    style={{ background: 'var(--ink)' }}>
+                    Se connecter
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </main>
+                </div>
+              ) : filtered.length === 0 ? (
+                <p className="rounded-3xl bg-white p-8 text-center shadow-sm" style={{ color: 'var(--muted-foreground)' }}>
+                  Aucun·e camarade ne correspond. Essaie un autre filtre.
+                </p>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filtered.map((m, i) => (
+                    <Reveal key={m.id} delay={(i % 4) + 1}>
+                      <article className="card-lift flex h-full flex-col rounded-3xl bg-white p-6 shadow-sm">
+                        <div className="flex items-start gap-4">
+                          <AvatarCircle user={m} name={`${m.firstName} ${m.lastName}`} color={m.color} />
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-bold text-lg text-[#252840]">{m.firstName} {m.lastName}</h3>
+                            {m.averageRating != null && (
+                              <div className="mt-1 flex items-center gap-1 text-xs" style={{ color: 'var(--muted-foreground)' }}>
+                                <Star className="h-3.5 w-3.5 fill-current" style={{ color: 'var(--orange-warm)' }} />
+                                <span className="font-semibold text-[#252840]">{Number(m.averageRating).toFixed(1)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {m.bio && <p className="mt-3 text-sm" style={{ color: 'var(--muted-foreground)' }}>{m.bio}</p>}
+
+                        {m.teaches.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'rgba(37,40,64,0.6)' }}>Enseigne</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {m.teaches.slice(0, 4).map(s => (
+                                <span
+                                  key={s.id ?? s.name}
+                                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+                                  style={{
+                                    background: s.isMatch ? 'var(--orange-warm)' : 'var(--cream)',
+                                    color: s.isMatch ? 'white' : 'var(--ink)',
+                                  }}
+                                >
+                                  {s.isMatch && <Star className="h-3 w-3 fill-white" />}
+                                  {s.name}
+                                </span>
+                              ))}
+                              {m.teaches.length > 4 && <span className="text-xs" style={{ color: 'var(--muted-foreground)' }}>+{m.teaches.length - 4}</span>}
+                            </div>
+                          </div>
+                        )}
+
+                        {m.score > 0 && (
+                          <span className="mt-3 inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 text-xs font-bold"
+                            style={{ background: 'rgba(63,107,76,0.12)', color: 'var(--learn)' }}>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1.5 5l3 3 5-5"/></svg>
+                            Correspond à vos objectifs
+                          </span>
+                        )}
+
+                        {requested.has(m.id) ? (
+                          <div className="mt-5 w-full py-2.5 rounded-full text-sm font-bold text-center" style={{ background: 'rgba(63,107,76,0.10)', color: 'var(--learn)' }}>
+                            Demande envoyée
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { if (!user) { openModal('login'); return }; setSelected(m) }}
+                            className="mt-5 inline-flex items-center justify-center gap-2 self-stretch rounded-full py-2.5 text-sm font-bold text-white transition hover:-translate-y-0.5 border-none cursor-pointer"
+                            style={{ background: 'var(--orange-warm)' }}
+                          >
+                            Réserver
+                          </button>
+                        )}
+                      </article>
+                    </Reveal>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </div>
   )
 }

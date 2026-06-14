@@ -22,6 +22,7 @@ export default function SessionRoom() {
   const [phase,            setPhase]            = useState('waiting')
   const [seconds,          setSeconds]          = useState(0)
   const [credits,          setCredits]          = useState(user?.credits ?? 120)
+  const [endResult,        setEndResult]        = useState(null)
   const [rating,           setRating]           = useState(0)
   const [ratingSubmitted,  setRatingSubmitted]  = useState(false)
   const [loadError,        setLoadError]        = useState('')
@@ -152,8 +153,13 @@ export default function SessionRoom() {
     if (iframeRef.current) iframeRef.current.src = 'about:blank'
     clearInterval(intervalRef.current)
     clearInterval(pollRef.current)
-    try { await api.post(`/sessions/${id}/end`, { durationSeconds: seconds }) }
-    catch (e) { console.warn('end error:', e) }
+    try {
+      const res = await api.post(`/sessions/${id}/end`, { durationSeconds: seconds })
+      setEndResult({
+        creditsToTeacher: res.data.creditsToTeacher ?? null,
+        creditsRefunded:  res.data.creditsRefunded  ?? null,
+      })
+    } catch (e) { console.warn('end error:', e) }
     setPhase('ended')
   }
 
@@ -284,15 +290,34 @@ export default function SessionRoom() {
                   <p className="text-white/40 text-xs mb-1">Durée</p>
                   <p className="text-white font-black text-xl font-mono">{fmt(seconds)}</p>
                 </div>
-                <div className={`rounded-2xl border border-white/10 px-5 py-4 text-center ${isTeacher ? 'bg-[rgba(61,92,40,0.2)]' : 'bg-[rgba(200,134,75,0.15)]'}`}>
-                  <p className="text-white/40 text-xs mb-1">Crédits {isTeacher ? 'gagnés' : 'dépensés'}</p>
-                  <p className={`font-black text-xl ${isTeacher ? 'text-[#86C46E]' : 'text-[#C8864B]'}`}>{isTeacher ? '+' : '-'}{cost}</p>
-                </div>
+                {endResult?.creditsToTeacher != null ? (
+                  <div className={`rounded-2xl border border-white/10 px-5 py-4 text-center ${isTeacher ? 'bg-[rgba(61,92,40,0.2)]' : 'bg-[rgba(200,134,75,0.15)]'}`}>
+                    <p className="text-white/40 text-xs mb-1">Crédits versés à l'enseignant</p>
+                    <p className="text-[#86C46E] font-black text-xl">+{endResult.creditsToTeacher}</p>
+                  </div>
+                ) : (
+                  <div className={`rounded-2xl border border-white/10 px-5 py-4 text-center ${isTeacher ? 'bg-[rgba(61,92,40,0.2)]' : 'bg-[rgba(200,134,75,0.15)]'}`}>
+                    <p className="text-white/40 text-xs mb-1">Crédits {isTeacher ? 'gagnés' : 'dépensés'}</p>
+                    <p className={`font-black text-xl ${isTeacher ? 'text-[#86C46E]' : 'text-[#C8864B]'}`}>{isTeacher ? '+' : '-'}{cost}</p>
+                  </div>
+                )}
                 <div className="rounded-2xl bg-white/5 border border-white/10 px-5 py-4 text-center">
                   <p className="text-white/40 text-xs mb-1">Solde restant</p>
                   <p className="text-white font-black text-xl">{Math.max(0, Math.floor(credits))} cr</p>
                 </div>
               </div>
+
+              {/* Remboursement prorata */}
+              {endResult?.creditsRefunded != null && endResult.creditsRefunded > 0 && (
+                <div className="flex items-center gap-2 bg-[rgba(61,92,40,0.25)] border border-[rgba(134,196,110,0.3)] px-5 py-3 rounded-2xl">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#86C46E" strokeWidth="2" strokeLinecap="round">
+                    <path d="M2 8l4 4 8-8"/>
+                  </svg>
+                  <p className="text-[#86C46E] text-sm font-semibold">
+                    +{endResult.creditsRefunded} crédits remboursés (session plus courte que prévu)
+                  </p>
+                </div>
+              )}
 
               {!isTeacher && (
                 <div className="text-center">

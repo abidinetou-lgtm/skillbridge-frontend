@@ -17,7 +17,7 @@ const LEGAL_LINKS = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-[rgba(255,255,255,0.08)] bg-[#252840] text-[#F8F4EA]">
+    <footer className="border-t-2 border-[rgba(255,255,255,0.14)] bg-[#0E0F1C] text-[#F8F4EA]">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
 
         {/* 3 colonnes */}
